@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MODERATOR
+  USER
+}
+
+enum ModuleType {
+  CORE // Sistema base
+  FEATURE // Funcionalidad
+  INTEGRATION // Integraciones externas
+  CUSTOM // Personalizado
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  EXECUTE
+}
+
+// ==================== MODELOS DE USUARIO ====================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?   @db.Text
+  name          String?
+  image         String?
+  emailVerified DateTime?
+
+  // OAuth
+  accounts Account[]
+  sessions Session[]
+
+  // Roles y permisos
+  role        UserRole         @default(USER)
+  permissions UserPermission[]
+
+  // Preferencias
+  preferences UserPreferences?
+
+  // Auditoría
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([role])
+}
+
+model UserPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Tema
+  theme  String @default("system") // "light", "dark", "system"
+  radius Float  @default(0.5) // 0, 0.3, 0.5, 0.75, 1.0
+
+  // Colores personalizados (opcional)
+  primaryColor String? // hex color
+  accentColor  String? // hex color
+
+  // Otras preferencias
+  fontSize      String  @default("default") // "sm", "default", "lg"
+  reducedMotion Boolean @default(false)
+  highContrast  Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== MODELOS DE AUTENTICACIÓN ====================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ==================== SISTEMA DE MÓDULOS ====================
+
+model Module {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  slug        String     @unique
+  description String?
+  icon        String? // Icono del módulo
+  type        ModuleType @default(FEATURE)
+  isActive    Boolean    @default(true)
+  order       Int        @default(0)
+
+  // Configuración
+  config Json? // Configuración específica del módulo
+  routes Json? // Rutas del módulo
+
+  // Relaciones
+  submodules  Submodule[]
+  permissions Permission[]
+
+  // Metadata
+  version String  @default("1.0.0")
+  author  String?
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  MenuItem       MenuItem[]
+  ModuleSettings ModuleSettings?
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+model Submodule {
+  id          String  @id @default(cuid())
+  moduleId    String
+  name        String
+  slug        String
+  description String?
+  icon        String?
+  isActive    Boolean @default(true)
+  order       Int     @default(0)
+
+  // Configuración
+  config Json? // Configuración específica
+  routes Json? // Rutas del submódulo
+
+  // Relaciones
+  module      Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  permissions Permission[]
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  MenuItem  MenuItem[]
+
+  @@unique([moduleId, slug])
+  @@index([moduleId])
+  @@index([isActive])
+}
+
+// ==================== SISTEMA DE PERMISOS ====================
+
+model Permission {
+  id          String  @id @default(cuid())
+  name        String
+  code        String  @unique // Ej: "posts.create", "users.delete"
+  description String?
+
+  // Relación con módulo o submódulo
+  moduleId    String?
+  submoduleId String?
+
+  module    Module?    @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  submodule Submodule? @relation(fields: [submoduleId], references: [id], onDelete: Cascade)
+
+  // Acciones permitidas
+  actions PermissionAction[]
+
+  // Usuarios con este permiso
+  users UserPermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([moduleId])
+  @@index([submoduleId])
+}
+
+model UserPermission {
+  id           String @id @default(cuid())
+  userId       String
+  permissionId String
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  // Permisos temporales
+  expiresAt DateTime?
+
+  grantedAt DateTime @default(now())
+  grantedBy String? // ID del admin que otorgó el permiso
+
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
+  @@index([expiresAt])
+}
+
+// ==================== SISTEMA DE NAVEGACIÓN ====================
+
+model MenuItem {
+  id          String  @id @default(cuid())
+  moduleId    String?
+  submoduleId String?
+  parentId    String? // Para menús anidados
+
+  title     String
+  icon      String?
+  path      String?
+  order     Int     @default(0)
+  isVisible Boolean @default(true)
+
+  // Permisos requeridos
+  requiredPermissions String[] // Array de códigos de permisos
+
+  parent   MenuItem?  @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children MenuItem[] @relation("MenuHierarchy")
+
+  module    Module?    @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  submodule Submodule? @relation(fields: [submoduleId], references: [id], onDelete: Cascade)
+
+  @@index([moduleId])
+  @@index([parentId])
+  @@index([order])
+}
+
+// ==================== AUDITORÍA ====================
+
+model AuditLog {
+  id       String  @id @default(cuid())
+  userId   String?
+  action   String // "module.created", "permission.granted", etc
+  entity   String // Tabla afectada
+  entityId String
+
+  changes  Json? // Antes/después
+  metadata Json? // IP, user agent, etc
+
+  timestamp DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([timestamp])
+}
+
+// ==================== CONFIGURACIÓN DE MÓDULOS ====================
+
+model ModuleSettings {
+  id       String @id @default(cuid())
+  moduleId String @unique
+
+  // Configuraciones específicas
+  features Json @default("{}") // Features habilitadas
+  limits   Json @default("{}") // Límites (ej: max users, storage)
+  styles   Json @default("{}") // Personalización visual
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  updatedAt DateTime @updatedAt
+}
