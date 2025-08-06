@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useEffect } from "react"
 import * as Icons from "lucide-react"
+import { useTheme } from "next-themes"
 
 import { NavMain } from "@/components/dashboard/nav-main"
 import { NavUser } from "@/components/dashboard/nav-user"
@@ -30,12 +31,14 @@ interface Module {
     id: string
     name: string
     slug: string
-    icon?: string
+    icon?: string | null
     order: number
     submodules?: {
         id: string
         name: string
         slug: string
+        icon?: string | null
+        description?: string | null
     }[]
 }
 
@@ -84,19 +87,24 @@ function applyUserColors(primaryColor?: string, accentColor?: string) {
 }
 
 export function AppSidebar({ session, modules = [], userPreferences, ...props }: AppSidebarProps) {
-    // Aplicar colores personalizados al montar
+    const { setTheme } = useTheme()
+    
+    // Aplicar colores personalizados y tema al montar
     useEffect(() => {
         if (userPreferences) {
             applyUserColors(userPreferences.primaryColor, userPreferences.accentColor)
+            // Aplicar el tema si está configurado
+            if (userPreferences.theme) {
+                setTheme(userPreferences.theme)
+            }
         }
-    }, [userPreferences])
+    }, [userPreferences, setTheme])
 
     // Convertir módulos de DB al formato de NavMain
     const navMainItems = modules.map(module => ({
         title: module.name,
         url: `/${module.slug}`,
-        icon: getIcon(module.icon),
-        isActive: module.slug === 'dashboard',
+        icon: getIcon(module.icon || undefined),
         items: module.submodules?.map(sub => ({
             title: sub.name,
             url: `/${module.slug}/${sub.slug}`

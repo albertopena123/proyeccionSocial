@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
+import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -29,6 +31,17 @@ export function AppearanceForm({ userId, initialPreferences }: AppearanceFormPro
     const router = useRouter()
     const [preferences, setPreferences] = useState(initialPreferences)
     const [saving, setSaving] = useState(false)
+    const { theme, setTheme } = useTheme()
+    const [mounted, setMounted] = useState(false)
+
+    // Evitar problemas de hidratación
+    useEffect(() => {
+        setMounted(true)
+        // Sincronizar el tema actual con las preferencias iniciales
+        if (initialPreferences.theme && initialPreferences.theme !== theme) {
+            setTheme(initialPreferences.theme)
+        }
+    }, [initialPreferences.theme, theme, setTheme])
 
     // Aplicar cambios en tiempo real
     const updatePreference = <K extends keyof UserPreferences>(
@@ -42,6 +55,8 @@ export function AppearanceForm({ userId, initialPreferences }: AppearanceFormPro
             applyColorChange(key, value as string)
         } else if (key === "radius") {
             document.documentElement.style.setProperty('--radius', `${value}rem`)
+        } else if (key === "theme" && mounted) {
+            setTheme(value as string)
         }
     }
 
@@ -67,12 +82,19 @@ export function AppearanceForm({ userId, initialPreferences }: AppearanceFormPro
             })
 
             if (response.ok) {
+                toast.success("Preferencias guardadas correctamente", {
+                    duration: 3000
+                })
                 router.refresh()
+            } else {
+                toast.error("Error al guardar las preferencias")
             }
         } catch (error) {
             console.error("Error saving preferences:", error)
+            toast.error("Error al guardar las preferencias")
+        } finally {
+            setSaving(false)
         }
-        setSaving(false)
     }
 
     return (
@@ -96,7 +118,7 @@ export function AppearanceForm({ userId, initialPreferences }: AppearanceFormPro
                             <div className="space-y-2">
                                 <Label htmlFor="theme-select">Tema</Label>
                                 <Select
-                                    value={preferences.theme}
+                                    value={mounted ? theme || preferences.theme : preferences.theme}
                                     onValueChange={(value) => updatePreference("theme", value)}
                                 >
                                     <SelectTrigger id="theme-select" className="w-full">

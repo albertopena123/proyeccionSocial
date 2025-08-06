@@ -28,7 +28,7 @@ enum PermissionAction {
   READ
   UPDATE
   DELETE
-  EXECUTE
+  EXPORT
 }
 
 // ==================== MODELOS DE USUARIO ====================
@@ -218,6 +218,9 @@ model UserPermission {
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  // Acciones específicas que tiene el usuario para este permiso
+  actions PermissionAction[] @default([READ])
 
   // Permisos temporales
   expiresAt DateTime?

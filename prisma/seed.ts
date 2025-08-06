@@ -1,5 +1,4 @@
-// prisma/seed.ts
-import { PrismaClient, UserRole, ModuleType, PermissionAction } from '@prisma/client'
+import { PrismaClient, UserRole, PermissionAction, ModuleType } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
@@ -7,35 +6,32 @@ const prisma = new PrismaClient()
 async function main() {
   console.log('🌱 Iniciando seed...')
 
-  // Limpiar datos existentes
+  // Limpiar base de datos
   await prisma.userPermission.deleteMany()
   await prisma.permission.deleteMany()
+  await prisma.auditLog.deleteMany()
+  await prisma.session.deleteMany()
+  await prisma.account.deleteMany()
+  await prisma.userPreferences.deleteMany()
+  await prisma.user.deleteMany()
   await prisma.submodule.deleteMany()
   await prisma.module.deleteMany()
-  await prisma.userPreferences.deleteMany()
-  await prisma.account.deleteMany()
-  await prisma.session.deleteMany()
-  await prisma.user.deleteMany()
 
-  // Crear usuarios
+  console.log('🧹 Base de datos limpia')
+
+  // Crear usuarios de prueba
   const hashedPassword = await bcrypt.hash('password123', 10)
-  
+
   const superAdmin = await prisma.user.create({
     data: {
       email: 'superadmin@example.com',
-      password: hashedPassword,
       name: 'Super Admin',
+      password: hashedPassword,
       role: UserRole.SUPER_ADMIN,
       emailVerified: new Date(),
       preferences: {
         create: {
-          theme: 'system',
-          radius: 0.5,
-          primaryColor: '25', // Naranja (hue)
-          accentColor: '200', // Azul
-          fontSize: 'default',
-          reducedMotion: false,
-          highContrast: false
+          theme: 'light'
         }
       }
     }
@@ -44,16 +40,13 @@ async function main() {
   const admin = await prisma.user.create({
     data: {
       email: 'admin@example.com',
-      password: hashedPassword,
       name: 'Admin User',
+      password: hashedPassword,
       role: UserRole.ADMIN,
       emailVerified: new Date(),
       preferences: {
         create: {
-          theme: 'light',
-          radius: 0.75,
-          primaryColor: '25', // Naranja
-          fontSize: 'default'
+          theme: 'light'
         }
       }
     }
@@ -62,20 +55,30 @@ async function main() {
   const moderator = await prisma.user.create({
     data: {
       email: 'moderator@example.com',
-      password: hashedPassword,
       name: 'Moderator User',
+      password: hashedPassword,
       role: UserRole.MODERATOR,
-      emailVerified: new Date()
+      emailVerified: new Date(),
+      preferences: {
+        create: {
+          theme: 'dark'
+        }
+      }
     }
   })
 
-  const normalUser = await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       email: 'user@example.com',
+      name: 'Regular User',
       password: hashedPassword,
-      name: 'Normal User',
       role: UserRole.USER,
-      emailVerified: new Date()
+      emailVerified: new Date(),
+      preferences: {
+        create: {
+          theme: 'system'
+        }
+      }
     }
   })
 
@@ -86,19 +89,11 @@ async function main() {
     data: {
       name: 'Dashboard',
       slug: 'dashboard',
-      description: 'Panel principal y estadísticas',
+      description: 'Panel principal con métricas y estadísticas',
       icon: 'LayoutDashboard',
       type: ModuleType.CORE,
       isActive: true,
-      order: 1,
-      config: {
-        showMetrics: true,
-        refreshInterval: 60000
-      },
-      routes: {
-        main: '/dashboard',
-        analytics: '/dashboard/analytics'
-      }
+      order: 1
     }
   })
 
@@ -116,7 +111,7 @@ async function main() {
           {
             name: 'Lista de Usuarios',
             slug: 'users-list',
-            description: 'Ver y gestionar usuarios',
+            description: 'Ver y gestionar usuarios del sistema',
             icon: 'UserCog',
             isActive: true,
             order: 1
@@ -124,13 +119,24 @@ async function main() {
           {
             name: 'Roles y Permisos',
             slug: 'roles-permissions',
-            description: 'Configurar roles y permisos',
+            description: 'Configurar roles y permisos de acceso',
             icon: 'Shield',
             isActive: true,
             order: 2
+          },
+          {
+            name: 'Gestión de Módulos',
+            slug: 'modules-management',
+            description: 'Administrar módulos y submódulos del sistema',
+            icon: 'Cube',
+            isActive: true,
+            order: 3
           }
         ]
       }
+    },
+    include: {
+      submodules: true
     }
   })
 
@@ -138,7 +144,7 @@ async function main() {
     data: {
       name: 'Gestión de Contenido',
       slug: 'content',
-      description: 'CMS para contenido del sitio',
+      description: 'Administración de contenido del sitio',
       icon: 'FileText',
       type: ModuleType.FEATURE,
       isActive: true,
@@ -148,7 +154,7 @@ async function main() {
           {
             name: 'Artículos',
             slug: 'articles',
-            description: 'Gestionar artículos y blogs',
+            description: 'Gestionar artículos y publicaciones',
             icon: 'Newspaper',
             isActive: true,
             order: 1
@@ -156,282 +162,311 @@ async function main() {
           {
             name: 'Categorías',
             slug: 'categories',
-            description: 'Organizar contenido',
-            icon: 'FolderTree',
+            description: 'Organizar contenido por categorías',
+            icon: 'FolderOpen',
             isActive: true,
             order: 2
           }
         ]
       }
+    },
+    include: {
+      submodules: true
     }
   })
 
-  // Agregar esto en el seed.ts después de crear settingsModule
-
-// Actualizar settingsModule con submódulos
-const settingsModule = await prisma.module.create({
+  const settingsModule = await prisma.module.create({
     data: {
-        name: 'Configuración',
-        slug: 'settings',
-        description: 'Configuración del sistema',
-        icon: 'Settings',
-        type: ModuleType.CORE,
-        isActive: true,
-        order: 99,
-        submodules: {
-            create: [
-                {
-                    name: 'Apariencia',
-                    slug: 'appearance',
-                    description: 'Personaliza colores, temas y diseño',
-                    icon: 'Palette',
-                    isActive: true,
-                    order: 1,
-                    config: {
-                        showThemeSelector: true,
-                        showColorPicker: true,
-                        showRadiusControl: true,
-                        showFontSize: true
-                    }
-                },
-                {
-                    name: 'Accesibilidad',
-                    slug: 'accessibility',
-                    description: 'Opciones de accesibilidad',
-                    icon: 'Accessibility',
-                    isActive: true,
-                    order: 2
-                },
-                {
-                    name: 'Notificaciones',
-                    slug: 'notifications',
-                    description: 'Gestiona tus notificaciones',
-                    icon: 'Bell',
-                    isActive: true,
-                    order: 3
-                },
-                {
-                    name: 'Cuenta',
-                    slug: 'account',
-                    description: 'Información y seguridad de tu cuenta',
-                    icon: 'User',
-                    isActive: true,
-                    order: 4
-                },
-                {
-                    name: 'Privacidad',
-                    slug: 'privacy',
-                    description: 'Configuración de privacidad y datos',
-                    icon: 'Shield',
-                    isActive: true,
-                    order: 5
-                }
-            ]
-        }
+      name: 'Configuración',
+      slug: 'settings',
+      description: 'Configuración del sistema',
+      icon: 'Settings',
+      type: ModuleType.CORE,
+      isActive: true,
+      order: 99,
+      submodules: {
+        create: [
+          {
+            name: 'Apariencia',
+            slug: 'appearance',
+            description: 'Personaliza colores, temas y diseño',
+            icon: 'Palette',
+            isActive: true,
+            order: 1,
+            config: {
+              showThemeSelector: true,
+              showColorPicker: true,
+              showRadiusControl: true,
+              showFontSize: true
+            }
+          },
+          {
+            name: 'Accesibilidad',
+            slug: 'accessibility',
+            description: 'Opciones de accesibilidad',
+            icon: 'Accessibility',
+            isActive: true,
+            order: 2
+          },
+          {
+            name: 'Notificaciones',
+            slug: 'notifications',
+            description: 'Gestiona tus notificaciones',
+            icon: 'Bell',
+            isActive: true,
+            order: 3
+          },
+          {
+            name: 'Cuenta',
+            slug: 'account',
+            description: 'Información y seguridad de tu cuenta',
+            icon: 'User',
+            isActive: true,
+            order: 4
+          },
+          {
+            name: 'Privacidad',
+            slug: 'privacy',
+            description: 'Configuración de privacidad y datos',
+            icon: 'Shield',
+            isActive: true,
+            order: 5
+          }
+        ]
+      }
+    },
+    include: {
+      submodules: true
     }
-})
-
-// Agregar permisos específicos para configuración
-await prisma.permission.createMany({
-    data: [
-        {
-            name: 'Ver Configuración',
-            code: 'settings.view',
-            description: 'Acceso a configuración personal',
-            moduleId: settingsModule.id,
-            actions: [PermissionAction.READ]
-        },
-        {
-            name: 'Modificar Apariencia',
-            code: 'settings.appearance',
-            description: 'Cambiar temas y colores',
-            moduleId: settingsModule.id,
-            actions: [PermissionAction.UPDATE]
-        },
-        {
-            name: 'Gestionar Notificaciones',
-            code: 'settings.notifications',
-            description: 'Configurar notificaciones',
-            moduleId: settingsModule.id,
-            actions: [PermissionAction.UPDATE]
-        }
-    ]
-})
+  })
 
   console.log('✅ Módulos creados')
 
-  // Crear permisos
-  await prisma.permission.createMany({
-    data: [
-      // Dashboard
-      {
-        name: 'Ver Dashboard',
-        code: 'dashboard.view',
-        description: 'Acceso al dashboard principal',
-        moduleId: dashboardModule.id,
-        actions: [PermissionAction.READ]
-      },
-      {
-        name: 'Ver Analytics',
-        code: 'dashboard.analytics',
-        description: 'Ver estadísticas avanzadas',
-        moduleId: dashboardModule.id,
-        actions: [PermissionAction.READ, PermissionAction.EXECUTE]
-      },
-      // Usuarios
-      {
-        name: 'Gestionar Usuarios',
-        code: 'users.manage',
-        description: 'CRUD completo de usuarios',
-        moduleId: usersModule.id,
-        actions: [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.UPDATE, PermissionAction.DELETE]
-      },
-      {
-        name: 'Ver Usuarios',
-        code: 'users.view',
-        description: 'Solo lectura de usuarios',
-        moduleId: usersModule.id,
-        actions: [PermissionAction.READ]
-      },
-      {
-        name: 'Gestionar Roles',
-        code: 'roles.manage',
-        description: 'Administrar roles y permisos',
-        moduleId: usersModule.id,
-        actions: [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.UPDATE, PermissionAction.DELETE]
-      },
-      // Contenido
-      {
-        name: 'Gestionar Contenido',
-        code: 'content.manage',
-        description: 'CRUD de contenido',
-        moduleId: contentModule.id,
-        actions: [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.UPDATE, PermissionAction.DELETE]
-      },
-      {
-        name: 'Publicar Contenido',
-        code: 'content.publish',
-        description: 'Publicar y despublicar contenido',
-        moduleId: contentModule.id,
-        actions: [PermissionAction.EXECUTE]
-      },
-      // Configuración
-      {
-        name: 'Administrar Sistema',
-        code: 'system.admin',
-        description: 'Configuración completa del sistema',
-        moduleId: settingsModule.id,
-        actions: [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.UPDATE, PermissionAction.DELETE, PermissionAction.EXECUTE]
-      }
+  // Crear permisos simplificados - UN PERMISO POR SUBMÓDULO
+  const permissions = []
+
+  // Permisos del Dashboard (a nivel de módulo)
+  permissions.push({
+    name: 'Acceso al Dashboard',
+    code: 'dashboard.access',
+    description: 'Acceso al dashboard principal',
+    moduleId: dashboardModule.id,
+    actions: [
+      PermissionAction.READ,
+      PermissionAction.EXPORT
     ]
   })
 
-  console.log('✅ Permisos creados')
+  // Permisos para submódulos de Usuarios
+  for (const submodule of usersModule.submodules) {
+    let permissionName = ''
+    let permissionCode = ''
+    let permissionDesc = ''
 
-  // Obtener permisos creados
+    switch (submodule.slug) {
+      case 'users-list':
+        permissionName = 'Gestión de Usuarios'
+        permissionCode = 'users.access'
+        permissionDesc = 'Acceso completo al módulo de gestión de usuarios'
+        break
+      case 'roles-permissions':
+        permissionName = 'Gestión de Roles y Permisos'
+        permissionCode = 'roles.access'
+        permissionDesc = 'Acceso completo al módulo de roles y permisos'
+        break
+      case 'modules-management':
+        permissionName = 'Gestión de Módulos'
+        permissionCode = 'modules.access'
+        permissionDesc = 'Acceso completo al módulo de gestión de módulos del sistema'
+        break
+    }
+
+    permissions.push({
+      name: permissionName,
+      code: permissionCode,
+      description: permissionDesc,
+      moduleId: usersModule.id,
+      submoduleId: submodule.id,
+      actions: [
+        PermissionAction.CREATE,
+        PermissionAction.READ,
+        PermissionAction.UPDATE,
+        PermissionAction.DELETE,
+        PermissionAction.EXPORT
+      ]
+    })
+  }
+
+  // Permisos para submódulos de Contenido
+  for (const submodule of contentModule.submodules) {
+    permissions.push({
+      name: `Gestión de ${submodule.name}`,
+      code: `${submodule.slug}.access`,
+      description: `Acceso completo al módulo de ${submodule.name.toLowerCase()}`,
+      moduleId: contentModule.id,
+      submoduleId: submodule.id,
+      actions: [
+        PermissionAction.CREATE,
+        PermissionAction.READ,
+        PermissionAction.UPDATE,
+        PermissionAction.DELETE,
+        PermissionAction.EXPORT
+      ]
+    })
+  }
+
+  // Permisos para Configuración (a nivel de módulo, los submódulos son personales)
+  permissions.push({
+    name: 'Configuración Personal',
+    code: 'settings.access',
+    description: 'Acceso a configuración personal del usuario',
+    moduleId: settingsModule.id,
+    actions: [
+      PermissionAction.READ,
+      PermissionAction.UPDATE
+    ]
+  })
+
+  // Permiso especial para administración del sistema
+  permissions.push({
+    name: 'Administración del Sistema',
+    code: 'system.admin',
+    description: 'Control total sobre la configuración del sistema',
+    moduleId: settingsModule.id,
+    actions: [
+      PermissionAction.CREATE,
+      PermissionAction.READ,
+      PermissionAction.UPDATE,
+      PermissionAction.DELETE,
+      PermissionAction.EXPORT
+    ]
+  })
+
+  // Crear todos los permisos
+  await prisma.permission.createMany({
+    data: permissions
+  })
+
+  console.log('✅ Permisos creados (sistema simplificado)')
+
+  // Obtener todos los permisos creados
   const allPermissions = await prisma.permission.findMany()
 
   // Asignar permisos según roles
-  // Super Admin - Todos los permisos
+  console.log('🔐 Asignando permisos por rol...')
+
+  // SUPER_ADMIN - Todos los permisos con todas las acciones
   await prisma.userPermission.createMany({
     data: allPermissions.map(permission => ({
       userId: superAdmin.id,
       permissionId: permission.id,
-      grantedBy: superAdmin.id
+      grantedBy: superAdmin.id,
+      actions: [
+        PermissionAction.CREATE,
+        PermissionAction.READ,
+        PermissionAction.UPDATE,
+        PermissionAction.DELETE,
+        PermissionAction.EXPORT
+      ]
     }))
   })
+  console.log('  ✓ Super Admin: Todos los permisos')
 
-  // Admin - Todos menos configuración del sistema
+  // ADMIN - Todos los permisos excepto administración del sistema (todas las acciones)
   const adminPermissions = allPermissions.filter(p => p.code !== 'system.admin')
   await prisma.userPermission.createMany({
     data: adminPermissions.map(permission => ({
       userId: admin.id,
       permissionId: permission.id,
-      grantedBy: superAdmin.id
+      grantedBy: superAdmin.id,
+      actions: [
+        PermissionAction.CREATE,
+        PermissionAction.READ,
+        PermissionAction.UPDATE,
+        PermissionAction.DELETE,
+        PermissionAction.EXPORT
+      ]
     }))
   })
+  console.log('  ✓ Admin: Todos excepto system.admin')
 
-  // Moderator - Solo gestión de contenido
+  // MODERATOR - Solo gestión de contenido y dashboard (con acciones limitadas)
   const moderatorPermissions = allPermissions.filter(p => 
-    p.code.startsWith('content.') || p.code === 'dashboard.view'
+    p.code === 'dashboard.access' ||
+    p.code === 'articles.access' ||
+    p.code === 'categories.access'
   )
   await prisma.userPermission.createMany({
     data: moderatorPermissions.map(permission => ({
       userId: moderator.id,
       permissionId: permission.id,
-      grantedBy: superAdmin.id
+      grantedBy: superAdmin.id,
+      actions: permission.code === 'dashboard.access' 
+        ? [PermissionAction.READ, PermissionAction.EXPORT]
+        : [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.UPDATE] // No DELETE para moderadores
     }))
   })
+  console.log('  ✓ Moderator: Dashboard y contenido')
 
-  // Usuario normal - Solo ver dashboard
-  const userPermissions = allPermissions.filter(p => p.code === 'dashboard.view')
+  // USER - Solo dashboard y configuración personal (solo lectura)
+  const userPermissions = allPermissions.filter(p => 
+    p.code === 'dashboard.access' ||
+    p.code === 'settings.access'
+  )
   await prisma.userPermission.createMany({
     data: userPermissions.map(permission => ({
-      userId: normalUser.id,
+      userId: user.id,
       permissionId: permission.id,
-      grantedBy: superAdmin.id
+      grantedBy: superAdmin.id,
+      actions: permission.code === 'settings.access'
+        ? [PermissionAction.READ, PermissionAction.UPDATE] // Puede actualizar su configuración
+        : [PermissionAction.READ] // Solo ver dashboard
     }))
   })
+  console.log('  ✓ User: Dashboard y configuración personal')
 
-  console.log('✅ Permisos asignados')
-
-  // Crear configuración de módulos
-  await prisma.moduleSettings.create({
-    data: {
-      moduleId: dashboardModule.id,
-      features: {
-        charts: true,
-        realtime: true,
-        export: true
-      },
-      limits: {
-        maxWidgets: 10,
-        refreshRate: 30
-      },
-      styles: {
-        primaryColor: '25', // Naranja
-        layout: 'grid'
-      }
-    }
-  })
-
-  console.log('✅ Configuración de módulos creada')
-
-  // Log de auditoría
+  // Crear algunos logs de auditoría de ejemplo
   await prisma.auditLog.createMany({
     data: [
       {
         userId: superAdmin.id,
-        action: 'system.initialized',
-        entity: 'System',
-        entityId: 'system',
+        action: 'auth.login',
+        entity: 'User',
+        entityId: superAdmin.id,
         metadata: {
           ip: '127.0.0.1',
-          userAgent: 'Seed Script'
+          userAgent: 'Mozilla/5.0'
         }
       },
       {
-        userId: superAdmin.id,
-        action: 'users.created',
+        userId: admin.id,
+        action: 'auth.login',
         entity: 'User',
         entityId: admin.id,
-        changes: {
-          before: null,
-          after: { email: admin.email, role: admin.role }
+        metadata: {
+          ip: '127.0.0.1',
+          userAgent: 'Mozilla/5.0'
         }
       }
     ]
   })
 
-  console.log('✅ Registros de auditoría creados')
-  console.log('🎉 Seed completado exitosamente')
-  
-  console.log('\n📋 Usuarios creados:')
-  console.log('  Super Admin: superadmin@example.com / password123')
-  console.log('  Admin: admin@example.com / password123')
-  console.log('  Moderator: moderator@example.com / password123')
-  console.log('  User: user@example.com / password123')
-  console.log('\n🎨 Color primario configurado: Naranja (hue: 25)')
+  console.log('✅ Logs de auditoría creados')
+
+  // Resumen final
+  console.log('\n📊 Resumen del seed:')
+  console.log(`  - ${await prisma.user.count()} usuarios`)
+  console.log(`  - ${await prisma.module.count()} módulos`)
+  console.log(`  - ${await prisma.submodule.count()} submódulos`)
+  console.log(`  - ${await prisma.permission.count()} permisos`)
+  console.log(`  - ${await prisma.userPermission.count()} asignaciones de permisos`)
+
+  console.log('\n🎉 Seed completado exitosamente!')
+  console.log('\n📝 Usuarios de prueba:')
+  console.log('  - superadmin@example.com / password123 (SUPER_ADMIN)')
+  console.log('  - admin@example.com / password123 (ADMIN)')
+  console.log('  - moderator@example.com / password123 (MODERATOR)')
+  console.log('  - user@example.com / password123 (USER)')
 }
 
 main()
