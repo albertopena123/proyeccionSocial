@@ -263,7 +263,23 @@ export function UsersDataTable({ data: initialData, permissions, currentUserId }
         {
             accessorKey: "lastActive",
             header: "Última Actividad",
-            cell: ({ row }) => row.original.lastActive,
+            cell: ({ row }) => {
+                const lastActive = row.original.lastActive
+                const isActive = lastActive === "Activo ahora"
+                
+                return (
+                    <div className="flex items-center gap-2">
+                        <div className={`h-2 w-2 rounded-full ${
+                            isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-300'
+                        }`} />
+                        <span className={`text-sm ${
+                            isActive ? 'text-green-600 font-medium' : 'text-muted-foreground'
+                        }`}>
+                            {lastActive}
+                        </span>
+                    </div>
+                )
+            },
         },
         {
             accessorKey: "permissions",

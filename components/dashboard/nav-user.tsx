@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 import {
     Avatar,
@@ -105,31 +106,21 @@ export function NavUser({
                             </div>
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuGroup>
-                            <DropdownMenuItem>
-                                <Sparkles />
-                                Upgrade to Pro
-                            </DropdownMenuItem>
-                        </DropdownMenuGroup>
+
                         <DropdownMenuSeparator />
                         <DropdownMenuGroup>
-                            <DropdownMenuItem>
-                                <BadgeCheck />
-                                Account
+                            <DropdownMenuItem asChild>
+                                <Link href="/settings/account" className="flex items-center">
+                                    <BadgeCheck className="mr-2 h-4 w-4" />
+                                    <span>Mi Cuenta</span>
+                                </Link>
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
-                                <CreditCard />
-                                Billing
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                                <Bell />
-                                Notifications
-                            </DropdownMenuItem>
+
                         </DropdownMenuGroup>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={handleSignOut}>
                             <LogOut />
-                            Log out
+                            Cerrar sesión
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

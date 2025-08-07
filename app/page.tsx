@@ -8,12 +8,12 @@ export default function HomePage() {
         <h1 className="text-4xl font-bold">Bienvenido</h1>
         <p className="text-gray-600">Sistema de autenticación con Next.js 14</p>
         <div className="space-x-4">
-          <Button asChild>
-            <Link href="/login">Iniciar sesión</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/register">Crear cuenta</Link>
-          </Button>
+          <Link href="/login">
+            <Button>Iniciar sesión</Button>
+          </Link>
+          <Link href="/register">
+            <Button variant="outline">Crear cuenta</Button>
+          </Link>
         </div>
       </div>
     </div>

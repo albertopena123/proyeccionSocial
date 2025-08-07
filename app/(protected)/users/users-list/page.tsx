@@ -8,6 +8,7 @@ import { IconDownload, IconPlus } from "@tabler/icons-react"
 import { CreateUserDialog } from "@/components/users/create-user-dialog"
 import { ExportUsersDialog } from "@/components/users/export-users-dialog"
 import { PermissionAction } from "@prisma/client"
+import { formatRelativeTime } from "@/lib/date-utils"
 
 export default async function UsersListPage() {
     const session = await auth()
@@ -18,7 +19,7 @@ export default async function UsersListPage() {
 
     // Verificar permisos granulares - ahora usando el nuevo sistema simplificado
     const canRead = await hasPermission(session.user.id, "users.access", PermissionAction.READ)
-    
+
     if (!canRead) {
         redirect("/dashboard")
     }
@@ -32,7 +33,7 @@ export default async function UsersListPage() {
         canRead
     }
 
-    // Obtener usuarios con sus permisos
+    // Obtener usuarios con sus permisos y última sesión
     const users = await prisma.user.findMany({
         include: {
             permissions: {
@@ -41,6 +42,12 @@ export default async function UsersListPage() {
                 }
             },
             preferences: true,
+            sessions: {
+                orderBy: {
+                    expires: 'desc'
+                },
+                take: 1
+            },
             _count: {
                 select: {
                     sessions: true
@@ -67,17 +74,35 @@ export default async function UsersListPage() {
     console.log("=====================================")
 
     // Transformar datos para la tabla
-    const tableData = users.map(user => ({
-        id: user.id,
-        name: user.name || "Sin nombre",
-        email: user.email,
-        role: user.role,
-        emailVerified: user.emailVerified,
-        createdAt: user.createdAt,
-        lastActive: user._count.sessions > 0 ? "Activo" : "Inactivo",
-        permissions: user.permissions.map(up => up.permission.name).join(", ") || "Sin permisos",
-        image: user.image
-    }))
+    const tableData = users.map(user => {
+        // Determinar la última actividad
+        let lastActive = "Nunca"
+        if (user.sessions && user.sessions.length > 0) {
+            const lastSession = user.sessions[0]
+            // Si la sesión aún no ha expirado, el usuario está actualmente activo
+            if (new Date(lastSession.expires) > new Date()) {
+                lastActive = "Activo ahora"
+            } else {
+                // Mostrar hace cuánto tiempo fue la última actividad
+                lastActive = formatRelativeTime(lastSession.expires)
+            }
+        } else if (user.updatedAt) {
+            // Si no hay sesiones, usar la última actualización del usuario
+            lastActive = formatRelativeTime(user.updatedAt)
+        }
+
+        return {
+            id: user.id,
+            name: user.name || "Sin nombre",
+            email: user.email,
+            role: user.role,
+            emailVerified: user.emailVerified,
+            createdAt: user.createdAt,
+            lastActive,
+            permissions: user.permissions.map(up => up.permission.name).join(", ") || "Sin permisos",
+            image: user.image
+        }
+    })
 
     return (
         <div className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -111,10 +136,10 @@ export default async function UsersListPage() {
                     )}
                 </div>
             </div>
-            
+
             <div className="px-4 lg:px-6">
-                <UsersDataTable 
-                    data={tableData} 
+                <UsersDataTable
+                    data={tableData}
                     permissions={permissions}
                     currentUserId={session.user.id}
                 />

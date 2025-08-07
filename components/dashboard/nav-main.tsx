@@ -48,6 +48,25 @@ export function NavMain({
                         pathname === subItem.url || pathname.startsWith(subItem.url + '/')
                     )
                     
+                    // Si no tiene submódulos, renderizar como Link directo
+                    if (!item.items?.length) {
+                        return (
+                            <SidebarMenuItem key={item.title}>
+                                <SidebarMenuButton 
+                                    asChild
+                                    tooltip={item.title}
+                                    isActive={isModuleActive}
+                                >
+                                    <Link href={item.url}>
+                                        {item.icon && <item.icon />}
+                                        <span>{item.title}</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        )
+                    }
+                    
+                    // Si tiene submódulos, renderizar como Collapsible
                     return (
                         <Collapsible
                             key={item.title}
@@ -59,38 +78,34 @@ export function NavMain({
                                 <CollapsibleTrigger asChild>
                                     <SidebarMenuButton 
                                         tooltip={item.title}
-                                        isActive={isModuleActive && !item.items?.length}
+                                        isActive={false}
                                     >
                                         {item.icon && <item.icon />}
                                         <span>{item.title}</span>
-                                        {item.items?.length && (
-                                            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                                        )}
+                                        <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                                     </SidebarMenuButton>
                                 </CollapsibleTrigger>
-                                {item.items?.length ? (
-                                    <CollapsibleContent>
-                                        <SidebarMenuSub>
-                                            {item.items.map((subItem) => {
-                                                const isSubItemActive = pathname === subItem.url || 
-                                                    pathname.startsWith(subItem.url + '/')
-                                                
-                                                return (
-                                                    <SidebarMenuSubItem key={subItem.title}>
-                                                        <SidebarMenuSubButton 
-                                                            asChild
-                                                            isActive={isSubItemActive}
-                                                        >
-                                                            <Link href={subItem.url}>
-                                                                <span>{subItem.title}</span>
-                                                            </Link>
-                                                        </SidebarMenuSubButton>
-                                                    </SidebarMenuSubItem>
-                                                )
-                                            })}
-                                        </SidebarMenuSub>
-                                    </CollapsibleContent>
-                                ) : null}
+                                <CollapsibleContent>
+                                    <SidebarMenuSub>
+                                        {item.items.map((subItem) => {
+                                            const isSubItemActive = pathname === subItem.url || 
+                                                pathname.startsWith(subItem.url + '/')
+                                            
+                                            return (
+                                                <SidebarMenuSubItem key={subItem.title}>
+                                                    <SidebarMenuSubButton 
+                                                        asChild
+                                                        isActive={isSubItemActive}
+                                                    >
+                                                        <Link href={subItem.url}>
+                                                            <span>{subItem.title}</span>
+                                                        </Link>
+                                                    </SidebarMenuSubButton>
+                                                </SidebarMenuSubItem>
+                                            )
+                                        })}
+                                    </SidebarMenuSub>
+                                </CollapsibleContent>
                             </SidebarMenuItem>
                         </Collapsible>
                     )

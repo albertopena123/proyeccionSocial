@@ -11,7 +11,21 @@
       "Bash(npm run lint:*)",
       "Bash(npx eslint:*)",
       "Bash(npx tsc:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npx prisma:*)",
+      "Bash(if exist .next rd /s /q .next)",
+      "Bash(npm run build:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(true)",
+      "Bash(taskkill:*)",
+      "Bash(npm run stop:*)",
+      "Bash(ls:*)",
+      "Bash(npx next:*)",
+      "Bash(if exist node_modules.prisma rd /s /q node_modules.prisma)",
+      "Bash(touch:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run clean-restart:*)",
+      "Bash(node:*)"
     ],
     "deny": []
   }

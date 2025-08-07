@@ -49,6 +49,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return null
           }
           
+          // Verificar si el usuario está activo
+          if (!user.isActive) {
+            throw new Error("Tu cuenta no está activada. Por favor, verifica tu correo institucional.")
+          }
+          
           const passwordsMatch = await bcrypt.compare(password, user.password)
           
           if (!passwordsMatch) {
@@ -145,7 +150,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true
     },
     
-    async jwt({ token, user, account, profile }) {
+    async jwt({ token, user, account, profile, trigger }) {
       if (user) {
         token.id = user.id
         token.role = user.role || "USER"
@@ -156,10 +161,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.image = profile.picture as string
       }
       
-      if (account?.provider === "google" && token.email) {
+      // Siempre obtener la imagen más reciente de la base de datos
+      if (token.email) {
         try {
           const dbUser = await prisma.user.findUnique({
-            where: { email: token.email },
+            where: { email: token.email as string },
             select: { id: true, role: true, image: true }
           })
           

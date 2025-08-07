@@ -24,11 +24,22 @@ async function main() {
 
   const superAdmin = await prisma.user.create({
     data: {
-      email: 'superadmin@example.com',
+      email: 'superadmin@unamad.edu.pe',
+      personalEmail: 'superadmin@example.com',
       name: 'Super Admin',
       password: hashedPassword,
       role: UserRole.SUPER_ADMIN,
       emailVerified: new Date(),
+      isActive: true,
+      studentCode: '20200001',
+      documentType: 'DNI',
+      documentNumber: '12345678',
+      dni: '12345678', // Mantener por compatibilidad
+      sex: 'M',
+      faculty: 'Facultad de Ingeniería',
+      career: 'Ingeniería de Sistemas e Informática',
+      careerCode: 'ISI',
+      enrollmentDate: '2020-1',
       preferences: {
         create: {
           theme: 'light'
@@ -39,11 +50,22 @@ async function main() {
 
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@example.com',
+      email: 'admin@unamad.edu.pe',
+      personalEmail: 'admin@example.com',
       name: 'Admin User',
       password: hashedPassword,
       role: UserRole.ADMIN,
       emailVerified: new Date(),
+      isActive: true,
+      studentCode: '20200002',
+      documentType: 'DNI',
+      documentNumber: '87654321',
+      dni: '87654321', // Mantener por compatibilidad
+      sex: 'F',
+      faculty: 'Facultad de Ingeniería',
+      career: 'Ingeniería de Sistemas e Informática',
+      careerCode: 'ISI',
+      enrollmentDate: '2020-1',
       preferences: {
         create: {
           theme: 'light'
@@ -54,11 +76,22 @@ async function main() {
 
   const moderator = await prisma.user.create({
     data: {
-      email: 'moderator@example.com',
+      email: 'moderator@unamad.edu.pe',
+      personalEmail: 'moderator@example.com',
       name: 'Moderator User',
       password: hashedPassword,
       role: UserRole.MODERATOR,
       emailVerified: new Date(),
+      isActive: true,
+      studentCode: '20210001',
+      documentType: 'CE',
+      documentNumber: 'CE1122334',
+      dni: '11223344', // Mantener por compatibilidad
+      sex: 'M',
+      faculty: 'Facultad de Educación',
+      career: 'Educación Matemática y Computación',
+      careerCode: 'EMC',
+      enrollmentDate: '2021-1',
       preferences: {
         create: {
           theme: 'dark'
@@ -69,11 +102,22 @@ async function main() {
 
   const user = await prisma.user.create({
     data: {
-      email: 'user@example.com',
+      email: 'user@unamad.edu.pe',
+      personalEmail: 'user@example.com',
       name: 'Regular User',
       password: hashedPassword,
       role: UserRole.USER,
       emailVerified: new Date(),
+      isActive: true,
+      studentCode: '20220001',
+      documentType: 'DNI',
+      documentNumber: '99887766',
+      dni: '99887766', // Mantener por compatibilidad
+      sex: 'F',
+      faculty: 'Facultad de Ciencias Económicas y Empresariales',
+      career: 'Administración y Negocios Internacionales',
+      careerCode: 'ANI',
+      enrollmentDate: '2022-1',
       preferences: {
         create: {
           theme: 'system'
@@ -166,6 +210,58 @@ async function main() {
             icon: 'FolderOpen',
             isActive: true,
             order: 2
+          }
+        ]
+      }
+    },
+    include: {
+      submodules: true
+    }
+  })
+
+  // Módulo de Documentos
+  const documentsModule = await prisma.module.create({
+    data: {
+      name: 'Documentos',
+      slug: 'documents',
+      description: 'Gestión de documentos universitarios',
+      icon: 'FileText',
+      type: ModuleType.FEATURE,
+      isActive: true,
+      order: 4,
+      submodules: {
+        create: [
+          {
+            name: 'Constancias',
+            slug: 'constancias',
+            description: 'Gestión de constancias universitarias',
+            icon: 'FileCheck',
+            isActive: true,
+            order: 1
+          },
+          {
+            name: 'Resoluciones',
+            slug: 'resoluciones',
+            description: 'Gestión de resoluciones universitarias',
+            icon: 'FilePlus',
+            isActive: true,
+            order: 2
+          },
+          {
+            name: 'UNAMAD',
+            slug: 'unamad',
+            description: 'Documentos oficiales de UNAMAD',
+            icon: 'Building',
+            isActive: true,
+            order: 3
+          },
+          {
+            name: 'DPSEC',
+            slug: 'dpsec',
+            description: 'Documentos de DPSEC',
+            icon: 'Shield',
+            isActive: true,
+            order: 4
           }
         ]
       }
@@ -315,6 +411,24 @@ async function main() {
     })
   }
 
+  // Permisos para submódulos de Documentos
+  for (const submodule of documentsModule.submodules) {
+    permissions.push({
+      name: `Gestión de ${submodule.name}`,
+      code: `${submodule.slug}.access`,
+      description: `Acceso completo al módulo de ${submodule.name.toLowerCase()}`,
+      moduleId: documentsModule.id,
+      submoduleId: submodule.id,
+      actions: [
+        PermissionAction.CREATE,
+        PermissionAction.READ,
+        PermissionAction.UPDATE,
+        PermissionAction.DELETE,
+        PermissionAction.EXPORT
+      ]
+    })
+  }
+
   // Permisos para Configuración (a nivel de módulo, los submódulos son personales)
   permissions.push({
     name: 'Configuración Personal',
@@ -348,6 +462,61 @@ async function main() {
   })
 
   console.log('✅ Permisos creados (sistema simplificado)')
+
+  // Crear facultades y departamentos de prueba
+  const facultadIngenieria = await prisma.facultad.create({
+    data: {
+      nombre: 'Facultad de Ingeniería',
+      codigo: 'FI',
+      departamentos: {
+        create: [
+          { nombre: 'Ingeniería de Sistemas e Informática', codigo: 'ISI' },
+          { nombre: 'Ingeniería Forestal y Medio Ambiente', codigo: 'IFMA' },
+          { nombre: 'Ingeniería Agroindustrial', codigo: 'IA' }
+        ]
+      }
+    },
+    include: {
+      departamentos: true
+    }
+  })
+
+  const facultadEducacion = await prisma.facultad.create({
+    data: {
+      nombre: 'Facultad de Educación',
+      codigo: 'FE',
+      departamentos: {
+        create: [
+          { nombre: 'Educación Primaria e Informática', codigo: 'EPI' },
+          { nombre: 'Educación Inicial y Especial', codigo: 'EIE' },
+          { nombre: 'Matemática y Computación', codigo: 'MC' }
+        ]
+      }
+    },
+    include: {
+      departamentos: true
+    }
+  })
+
+  const facultadECASSA = await prisma.facultad.create({
+    data: {
+      nombre: 'Facultad de Ecoturismo y Ciencias Sociales',
+      codigo: 'FECSSA',
+      departamentos: {
+        create: [
+          { nombre: 'Administración y Negocios Internacionales', codigo: 'ANI' },
+          { nombre: 'Contabilidad y Finanzas', codigo: 'CF' },
+          { nombre: 'Derecho y Ciencias Políticas', codigo: 'DCP' },
+          { nombre: 'Ecoturismo', codigo: 'ECO' }
+        ]
+      }
+    },
+    include: {
+      departamentos: true
+    }
+  })
+
+  console.log('✅ Facultades y departamentos creados')
 
   // Obtener todos los permisos creados
   const allPermissions = await prisma.permission.findMany()
