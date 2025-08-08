@@ -16,12 +16,14 @@ interface ConstanciasPageClientProps {
         canRead: boolean
     }
     currentUserId: string
+    currentUserRole?: string
 }
 
 export function ConstanciasPageClient({ 
     initialData, 
     permissions, 
-    currentUserId 
+    currentUserId,
+    currentUserRole 
 }: ConstanciasPageClientProps) {
     const [constancias, setConstancias] = React.useState(initialData)
     const [refreshKey, setRefreshKey] = React.useState(0)
@@ -91,6 +93,7 @@ export function ConstanciasPageClient({
                     data={constancias}
                     permissions={permissions}
                     currentUserId={currentUserId}
+                    currentUserRole={currentUserRole}
                 />
             </div>
         </div>

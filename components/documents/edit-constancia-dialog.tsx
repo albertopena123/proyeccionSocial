@@ -56,9 +56,10 @@ interface EditConstanciaDialogProps {
     constancia: Constancia
     open: boolean
     onOpenChange: (open: boolean) => void
+    currentUserRole?: string
 }
 
-export function EditConstanciaDialog({ constancia, open, onOpenChange }: EditConstanciaDialogProps) {
+export function EditConstanciaDialog({ constancia, open, onOpenChange, currentUserRole }: EditConstanciaDialogProps) {
     const [isLoading, setIsLoading] = React.useState(false)
     const [file, setFile] = React.useState<File | null>(null)
     const [fileName, setFileName] = React.useState<string>("")
@@ -149,9 +150,10 @@ export function EditConstanciaDialog({ constancia, open, onOpenChange }: EditCon
         }
     }
 
-    // No permitir edición si está aprobado
+    // No permitir edición si está aprobado (excepto para SUPER_ADMIN)
     const isApproved = constancia?.status === "APROBADO"
-    const isDisabled = isLoading || isApproved
+    const isSuperAdmin = currentUserRole === "SUPER_ADMIN"
+    const isDisabled = isLoading || (isApproved && !isSuperAdmin)
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -159,8 +161,10 @@ export function EditConstanciaDialog({ constancia, open, onOpenChange }: EditCon
                 <DialogHeader>
                     <DialogTitle>Editar Constancia</DialogTitle>
                     <DialogDescription>
-                        {isApproved 
+                        {isApproved && !isSuperAdmin
                             ? "Esta constancia está aprobada y no puede ser editada"
+                            : isApproved && isSuperAdmin
+                            ? "Editando constancia aprobada (Modo Administrador)"
                             : "Actualiza los datos de la constancia"}
                     </DialogDescription>
                 </DialogHeader>

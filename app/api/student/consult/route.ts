@@ -33,22 +33,35 @@ export async function POST(request: NextRequest) {
       throw new Error(`Error al consultar: ${response.status}`)
     }
 
-    const studentData = await response.json()
-    console.log("Datos del API UNAMAD:", studentData)
+    const apiResponse = await response.json()
+    console.log("Respuesta del API UNAMAD:", apiResponse)
 
-    // Formatear los datos según la respuesta de la API
+    // Verificar si la respuesta tiene el formato esperado
+    if (!apiResponse.data || !Array.isArray(apiResponse.data) || apiResponse.data.length === 0) {
+      return NextResponse.json(
+        { error: "Formato de respuesta inesperado o estudiante no encontrado" },
+        { status: 404 }
+      )
+    }
+
+    // Obtener los datos del primer estudiante
+    const studentData = apiResponse.data[0].info
+    const totalCredits = apiResponse.data[0].totalCreditsApproved
+
+    // Formatear los datos según la nueva estructura de la API
     const formattedData = {
-      codigo: studentData.userName,
+      codigo: studentData.username,
       dni: studentData.dni,
       nombres: studentData.name,
       apellidoPaterno: studentData.paternalSurname,
       apellidoMaterno: studentData.maternalSurname,
       apellidos: `${studentData.paternalSurname} ${studentData.maternalSurname}`,
-      nombreCompleto: `${studentData.name} ${studentData.paternalSurname} ${studentData.maternalSurname}`,
+      nombreCompleto: `${studentData.paternalSurname} ${studentData.maternalSurname} ${studentData.name}`,
       email: studentData.email,
       emailPersonal: studentData.personalEmail,
       carrera: studentData.carrerName,
       facultad: studentData.facultyName,
+      creditosAprobados: totalCredits
     }
     console.log("Datos formateados:", formattedData)
 

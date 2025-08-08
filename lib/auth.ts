@@ -7,11 +7,52 @@ import GoogleProvider from "next-auth/providers/google"
 import { prisma } from "./prisma"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
+import { UserRole, PermissionAction } from "@prisma/client"
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 })
+
+// Función helper para asignar permisos por defecto a nuevos usuarios
+async function assignDefaultPermissions(userId: string, role: UserRole = UserRole.USER) {
+  try {
+    // Obtener permisos según el rol
+    let permissionCodes: string[] = []
+    
+    switch (role) {
+      case UserRole.USER:
+        // Usuario regular - permisos básicos
+        permissionCodes = ['dashboard.access', 'settings.access']
+        break
+      // Nota: Por seguridad, usuarios que se registran con Google solo obtienen rol USER
+      // Los administradores deben asignar manualmente roles superiores
+    }
+
+    const permissions = await prisma.permission.findMany({
+      where: {
+        code: {
+          in: permissionCodes
+        }
+      }
+    })
+
+    if (permissions.length > 0) {
+      await prisma.userPermission.createMany({
+        data: permissions.map(permission => ({
+          userId: userId,
+          permissionId: permission.id,
+          grantedBy: userId, // Auto-asignado
+          actions: permission.code === 'settings.access' 
+            ? [PermissionAction.READ, PermissionAction.UPDATE]
+            : [PermissionAction.READ]
+        }))
+      })
+    }
+  } catch (error) {
+    console.error("Error asignando permisos por defecto:", error)
+  }
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -198,6 +239,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async createUser({ user }) {
       console.log(`Nuevo usuario creado: ${user.email}`)
+      
+      // Asignar permisos por defecto a usuarios nuevos
+      // Esto se ejecuta cuando un usuario se registra con Google por primera vez
+      if (user.id) {
+        await assignDefaultPermissions(user.id, UserRole.USER)
+        console.log(`Permisos por defecto asignados a: ${user.email}`)
+      }
     },
   },
   debug: process.env.NODE_ENV === "development",

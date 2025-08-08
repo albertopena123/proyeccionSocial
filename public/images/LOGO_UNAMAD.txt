@@ -1,0 +1,30 @@
+====================================================
+INSTRUCCIONES PARA AGREGAR EL LOGO DE UNAMAD
+====================================================
+
+IMPORTANTE: Necesitas agregar el logo oficial de UNAMAD
+
+PASO 1: NOMBRE DEL ARCHIVO
+-------------------------
+El archivo debe llamarse: unamad-logo.png
+
+PASO 2: UBICACIÓN
+-----------------
+Coloca el archivo en esta carpeta: D:\proyeccionSocial\public\images\
+
+PASO 3: ESPECIFICACIONES RECOMENDADAS
+-------------------------------------
+- Formato: PNG con fondo transparente (preferible)
+- Tamaño recomendado: 200x200 píxeles o proporcional
+- Peso máximo: 100KB para carga rápida
+
+PASO 4: DÓNDE SE USA
+--------------------
+- En el sidebar de la página principal
+- En el hero del carrusel (opcional)
+- En la página de consulta de documentos
+
+NOTA: Si no tienes el logo, el sistema mostrará un logo alternativo
+con la letra "U" en un círculo con gradiente.
+
+====================================================

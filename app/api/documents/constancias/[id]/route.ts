@@ -88,6 +88,14 @@ export async function PATCH(
 
         const { id } = await params
 
+        // Obtener el usuario para verificar si es SUPER_ADMIN
+        const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { role: true }
+        })
+
+        const isSuperAdmin = user?.role === 'SUPER_ADMIN'
+
         // Verificar si la constancia existe
         const existingConstancia = await prisma.constancia.findUnique({
             where: {
@@ -102,8 +110,8 @@ export async function PATCH(
             )
         }
 
-        // No permitir editar constancias aprobadas
-        if (existingConstancia.status === "APROBADO") {
+        // No permitir editar constancias aprobadas (excepto para SUPER_ADMIN)
+        if (!isSuperAdmin && existingConstancia.status === "APROBADO") {
             return NextResponse.json(
                 { error: "No se pueden editar constancias aprobadas" },
                 { status: 400 }

@@ -196,6 +196,28 @@ export function CreateUserDialog({ children }: CreateUserDialogProps) {
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                    <FormDescription>
+                                        {field.value === UserRole.SUPER_ADMIN && (
+                                            <span className="text-xs text-orange-600">
+                                                ✓ Se asignarán todos los permisos del sistema automáticamente
+                                            </span>
+                                        )}
+                                        {field.value === UserRole.ADMIN && (
+                                            <span className="text-xs text-blue-600">
+                                                ✓ Se asignarán permisos administrativos (excepto configuración del sistema)
+                                            </span>
+                                        )}
+                                        {field.value === UserRole.MODERATOR && (
+                                            <span className="text-xs text-purple-600">
+                                                ✓ Se asignarán permisos para gestionar contenido, constancias y resoluciones
+                                            </span>
+                                        )}
+                                        {field.value === UserRole.USER && (
+                                            <span className="text-xs text-gray-600">
+                                                ✓ Se asignarán permisos básicos (dashboard y configuración personal)
+                                            </span>
+                                        )}
+                                    </FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )}

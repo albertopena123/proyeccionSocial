@@ -56,6 +56,7 @@ export default async function ConstanciasPage() {
             initialData={constancias}
             permissions={permissions}
             currentUserId={session.user.id}
+            currentUserRole={session.user.role}
         />
     )
 }

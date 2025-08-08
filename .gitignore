@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# Ignorar carpetas de backups
+firestore-backups/
+storage-backups/
 # production
 /build
 

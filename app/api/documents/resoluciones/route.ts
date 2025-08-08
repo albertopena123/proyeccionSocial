@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
                 facultad: true,
                 departamento: true,
                 estudiantes: true,
+                archivos: true,
                 createdBy: {
                     select: {
                         id: true,
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
         const departamentoId = parseInt(formData.get('departamentoId') as string)
         const estudiantesJson = formData.get('estudiantes') as string | null
         const docentesJson = formData.get('docentes') as string | null
-        const file = formData.get('file') as File | null
+        const files = formData.getAll('files') as File[]
 
         // Validaciones básicas
         if (!numeroResolucion || !fechaResolucion || !tipoResolucion) {
@@ -116,51 +117,74 @@ export async function POST(request: Request) {
             )
         }
 
-        // Procesar archivo si existe
-        let fileName: string | null = null
-        let fileUrl: string | null = null
-        let fileSize: number | null = null
-        let fileMimeType: string | null = null
+        // Procesar archivos si existen
+        const archivosParaGuardar: Array<{
+            fileName: string
+            fileUrl: string
+            fileSize: number
+            fileMimeType: string
+            tipo?: string
+        }> = []
 
-        if (file && file.size > 0) {
-            // Validar tipo de archivo
-            const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
-            if (!allowedTypes.includes(file.type)) {
-                return NextResponse.json(
-                    { error: "Tipo de archivo no permitido" },
-                    { status: 400 }
-                )
-            }
-
-            // Validar tamaño (5MB)
-            if (file.size > 5 * 1024 * 1024) {
-                return NextResponse.json(
-                    { error: "El archivo no debe superar los 5MB" },
-                    { status: 400 }
-                )
-            }
-
+        if (files && files.length > 0) {
             // Crear directorio si no existe
             const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'resoluciones')
             if (!existsSync(uploadDir)) {
                 await mkdir(uploadDir, { recursive: true })
             }
 
-            // Generar nombre único para el archivo
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-            const fileExtension = path.extname(file.name)
-            fileName = file.name
-            const savedFileName = `${uniqueSuffix}${fileExtension}`
-            const filePath = path.join(uploadDir, savedFileName)
+            for (const file of files) {
+                if (file.size > 0) {
+                    // Validar tipo de archivo
+                    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
+                    if (!allowedTypes.includes(file.type)) {
+                        return NextResponse.json(
+                            { error: `Tipo de archivo no permitido: ${file.name}` },
+                            { status: 400 }
+                        )
+                    }
 
-            // Guardar archivo
-            const bytes = await file.arrayBuffer()
-            const buffer = Buffer.from(bytes)
-            await writeFile(filePath, buffer)
+                    // Validar tamaño (5MB)
+                    if (file.size > 5 * 1024 * 1024) {
+                        return NextResponse.json(
+                            { error: `El archivo ${file.name} supera los 5MB` },
+                            { status: 400 }
+                        )
+                    }
 
-            fileUrl = `/api/documents/files/resoluciones/${savedFileName}`
-            fileSize = file.size
-            fileMimeType = file.type
+                    // Generar nombre único para el archivo
+                    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+                    const fileExtension = path.extname(file.name)
+                    const savedFileName = `${uniqueSuffix}${fileExtension}`
+                    const filePath = path.join(uploadDir, savedFileName)
+
+                    // Guardar archivo
+                    const bytes = await file.arrayBuffer()
+                    const buffer = Buffer.from(bytes)
+                    await writeFile(filePath, buffer)
+
+                    archivosParaGuardar.push({
+                        fileName: file.name,
+                        fileUrl: `/api/documents/files/resoluciones/${savedFileName}`,
+                        fileSize: file.size,
+                        fileMimeType: file.type,
+                        tipo: file.type.includes('pdf') ? 'resolucion' : 'anexo'
+                    })
+                }
+            }
+        }
+
+        // Mantener compatibilidad con campos legacy si hay solo un archivo
+        let fileName: string | null = null
+        let fileUrl: string | null = null
+        let fileSize: number | null = null
+        let fileMimeType: string | null = null
+        
+        if (archivosParaGuardar.length === 1) {
+            fileName = archivosParaGuardar[0].fileName
+            fileUrl = archivosParaGuardar[0].fileUrl
+            fileSize = archivosParaGuardar[0].fileSize
+            fileMimeType = archivosParaGuardar[0].fileMimeType
         }
 
         // Parsear docentes si existen
@@ -219,6 +243,9 @@ export async function POST(request: Request) {
                         nombres: est.nombres,
                         apellidos: est.apellidos
                     }))
+                },
+                archivos: {
+                    create: archivosParaGuardar
                 }
             },
             include: {
@@ -226,6 +253,7 @@ export async function POST(request: Request) {
                 departamento: true,
                 docentes: true,
                 estudiantes: true,
+                archivos: true,
                 createdBy: {
                     select: {
                         id: true,

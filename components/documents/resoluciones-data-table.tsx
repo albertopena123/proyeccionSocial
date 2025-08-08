@@ -103,6 +103,15 @@ interface Resolucion {
         nombres: string
         apellidos: string
     }>
+    archivos?: Array<{
+        id: string
+        fileName: string
+        fileUrl: string
+        fileSize?: number | null
+        fileMimeType?: string | null
+        tipo?: string | null
+        createdAt: Date | string
+    }>
     createdBy: {
         id: string
         name: string | null
@@ -127,10 +136,11 @@ interface ResolucionesDataTableProps {
     data: Resolucion[]
     permissions: ResolucionPermissions
     currentUserId: string
+    currentUserRole?: string
     facultades?: { id: string; nombre: string; departamentos?: any[] }[]
 }
 
-export function ResolucionesDataTable({ data: initialData, permissions, currentUserId, facultades = [] }: ResolucionesDataTableProps) {
+export function ResolucionesDataTable({ data: initialData, permissions, currentUserId, currentUserRole, facultades = [] }: ResolucionesDataTableProps) {
     const [data, setData] = React.useState(initialData)
     
     // Actualizar los datos cuando cambien los datos iniciales
@@ -375,28 +385,71 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
             },
         },
         {
-            accessorKey: "fileName",
-            header: "Archivo",
+            accessorKey: "archivos",
+            header: "Archivos",
             cell: ({ row }) => {
+                const archivos = row.original.archivos || []
                 const fileName = row.original.fileName
                 const fileUrl = row.original.fileUrl
 
-                if (!fileName) return <span className="text-muted-foreground">Sin archivo</span>
+                // Si no hay archivos en el array pero sí en los campos legacy
+                if (archivos.length === 0 && fileName) {
+                    return (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                                if (fileUrl) {
+                                    window.open(fileUrl, '_blank')
+                                }
+                            }}
+                            disabled={!fileUrl}
+                        >
+                            <IconDownload className="mr-1 h-3 w-3" />
+                            1 archivo
+                        </Button>
+                    )
+                }
+
+                if (archivos.length === 0) {
+                    return <span className="text-muted-foreground">Sin archivos</span>
+                }
+
+                if (archivos.length === 1) {
+                    return (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                                window.open(archivos[0].fileUrl, '_blank')
+                            }}
+                        >
+                            <IconDownload className="mr-1 h-3 w-3" />
+                            1 archivo
+                        </Button>
+                    )
+                }
 
                 return (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                            if (fileUrl) {
-                                window.open(fileUrl, '_blank')
-                            }
-                        }}
-                        disabled={!fileUrl}
-                    >
-                        <IconDownload className="mr-1 h-3 w-3" />
-                        Descargar
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                                <IconDownload className="mr-1 h-3 w-3" />
+                                {archivos.length} archivos
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            {archivos.map((archivo, index) => (
+                                <DropdownMenuItem
+                                    key={archivo.id}
+                                    onClick={() => window.open(archivo.fileUrl, '_blank')}
+                                >
+                                    <IconDownload className="mr-2 h-4 w-4" />
+                                    {archivo.tipo || `Archivo ${index + 1}`}
+                                </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 )
             },
         },
@@ -406,7 +459,9 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
                 const resolucion = row.original
                 const isPending = resolucion.status === "PENDIENTE"
                 const isApproved = resolucion.status === "APROBADO"
-                const canDelete = permissions.canDelete && !isApproved
+                const isSuperAdmin = currentUserRole === "SUPER_ADMIN"
+                const canEditApproved = isSuperAdmin && isApproved
+                const canDelete = permissions.canDelete && (!isApproved || isSuperAdmin)
 
                 return (
                     <DropdownMenu>
@@ -425,11 +480,11 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
                             {permissions.canUpdate && (
                                 <>
                                     <DropdownMenuItem
-                                        disabled={isApproved}
-                                        onClick={() => !isApproved && setEditResolucion(resolucion)}
+                                        disabled={isApproved && !isSuperAdmin}
+                                        onClick={() => ((!isApproved || isSuperAdmin) && setEditResolucion(resolucion))}
                                     >
                                         <IconEdit className="mr-2 h-4 w-4" />
-                                        {isApproved ? "No editable (Aprobado)" : "Editar"}
+                                        {isApproved && !isSuperAdmin ? "No editable (Aprobado)" : "Editar"}
                                     </DropdownMenuItem>
 
                                     {isPending && (

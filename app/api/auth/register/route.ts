@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import crypto from "crypto"
 import { sendVerificationEmail } from "@/lib/email"
+import { UserRole, PermissionAction } from "@prisma/client"
 
 const registerSchema = z.object({
   studentCode: z.string()
@@ -64,6 +65,17 @@ const registerSchema = z.object({
 // Función para generar token de verificación
 function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString('hex')
+}
+
+// Función helper para determinar las acciones según el rol y el permiso
+function getActionsForRoleAndPermission(role: UserRole, permissionCode: string): PermissionAction[] {
+  // Los usuarios nuevos siempre empiezan con el rol USER
+  // Solo tienen permisos básicos
+  if (permissionCode === 'settings.access') {
+    return [PermissionAction.READ, PermissionAction.UPDATE]
+  }
+  // Por defecto para usuario regular
+  return [PermissionAction.READ]
 }
 
 export async function POST(req: Request) {
@@ -162,6 +174,34 @@ export async function POST(req: Request) {
         preferences: true
       }
     })
+
+    // Asignar permisos por defecto para el rol USER
+    try {
+      // Obtener los permisos básicos para usuarios nuevos
+      const userPermissions = await prisma.permission.findMany({
+        where: {
+          OR: [
+            { code: 'dashboard.access' },
+            { code: 'settings.access' }
+          ]
+        }
+      })
+
+      // Asignar los permisos al usuario
+      if (userPermissions.length > 0) {
+        await prisma.userPermission.createMany({
+          data: userPermissions.map(permission => ({
+            userId: user.id,
+            permissionId: permission.id,
+            grantedBy: user.id, // Auto-asignado durante el registro
+            actions: getActionsForRoleAndPermission(UserRole.USER, permission.code)
+          }))
+        })
+      }
+    } catch (permissionError) {
+      console.error("Error asignando permisos por defecto:", permissionError)
+      // No fallar el registro si los permisos no se asignan, pero registrar el error
+    }
 
     // Enviar email de verificación
     try {

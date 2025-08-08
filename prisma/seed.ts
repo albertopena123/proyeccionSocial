@@ -34,7 +34,7 @@ async function main() {
       studentCode: '20200001',
       documentType: 'DNI',
       documentNumber: '12345678',
-      dni: '12345678', // Mantener por compatibilidad
+      dni: '12345678',
       sex: 'M',
       faculty: 'Facultad de Ingeniería',
       career: 'Ingeniería de Sistemas e Informática',
@@ -60,7 +60,7 @@ async function main() {
       studentCode: '20200002',
       documentType: 'DNI',
       documentNumber: '87654321',
-      dni: '87654321', // Mantener por compatibilidad
+      dni: '87654321',
       sex: 'F',
       faculty: 'Facultad de Ingeniería',
       career: 'Ingeniería de Sistemas e Informática',
@@ -86,7 +86,7 @@ async function main() {
       studentCode: '20210001',
       documentType: 'CE',
       documentNumber: 'CE1122334',
-      dni: '11223344', // Mantener por compatibilidad
+      dni: '11223344',
       sex: 'M',
       faculty: 'Facultad de Educación',
       career: 'Educación Matemática y Computación',
@@ -112,9 +112,9 @@ async function main() {
       studentCode: '20220001',
       documentType: 'DNI',
       documentNumber: '99887766',
-      dni: '99887766', // Mantener por compatibilidad
+      dni: '99887766',
       sex: 'F',
-      faculty: 'Facultad de Ciencias Económicas y Empresariales',
+      faculty: 'Facultad de Ecoturismo',
       career: 'Administración y Negocios Internacionales',
       careerCode: 'ANI',
       enrollmentDate: '2022-1',
@@ -338,10 +338,10 @@ async function main() {
 
   console.log('✅ Módulos creados')
 
-  // Crear permisos simplificados - UN PERMISO POR SUBMÓDULO
+  // Crear permisos simplificados
   const permissions = []
 
-  // Permisos del Dashboard (a nivel de módulo)
+  // Permisos del Dashboard
   permissions.push({
     name: 'Acceso al Dashboard',
     code: 'dashboard.access',
@@ -429,11 +429,81 @@ async function main() {
     })
   }
 
-  // Permisos para Configuración (a nivel de módulo, los submódulos son personales)
+  // Permisos para submódulos de Configuración
+  for (const submodule of settingsModule.submodules) {
+    let permissionName = ''
+    let permissionCode = ''
+    let permissionDesc = ''
+    let actions: PermissionAction[] = []
+
+    switch (submodule.slug) {
+      case 'appearance':
+        permissionName = 'Configuración de Apariencia'
+        permissionCode = 'appearance.access'
+        permissionDesc = 'Personalizar temas, colores y diseño de la interfaz'
+        actions = [
+          PermissionAction.READ,
+          PermissionAction.UPDATE
+        ]
+        break
+      case 'accessibility':
+        permissionName = 'Configuración de Accesibilidad'
+        permissionCode = 'accessibility.access'
+        permissionDesc = 'Gestionar opciones de accesibilidad'
+        actions = [
+          PermissionAction.READ,
+          PermissionAction.UPDATE
+        ]
+        break
+      case 'notifications':
+        permissionName = 'Configuración de Notificaciones'
+        permissionCode = 'notifications.access'
+        permissionDesc = 'Gestionar preferencias de notificaciones'
+        actions = [
+          PermissionAction.CREATE,
+          PermissionAction.READ,
+          PermissionAction.UPDATE,
+          PermissionAction.DELETE
+        ]
+        break
+      case 'account':
+        permissionName = 'Configuración de Cuenta'
+        permissionCode = 'account.access'
+        permissionDesc = 'Gestionar información y seguridad de la cuenta'
+        actions = [
+          PermissionAction.READ,
+          PermissionAction.UPDATE,
+          PermissionAction.DELETE
+        ]
+        break
+      case 'privacy':
+        permissionName = 'Configuración de Privacidad'
+        permissionCode = 'privacy.access'
+        permissionDesc = 'Gestionar configuración de privacidad y datos'
+        actions = [
+          PermissionAction.READ,
+          PermissionAction.UPDATE,
+          PermissionAction.DELETE,
+          PermissionAction.EXPORT
+        ]
+        break
+    }
+
+    permissions.push({
+      name: permissionName,
+      code: permissionCode,
+      description: permissionDesc,
+      moduleId: settingsModule.id,
+      submoduleId: submodule.id,
+      actions: actions
+    })
+  }
+
+  // Permiso general para configuración (compatibilidad)
   permissions.push({
     name: 'Configuración Personal',
     code: 'settings.access',
-    description: 'Acceso a configuración personal del usuario',
+    description: 'Acceso general a configuración personal del usuario',
     moduleId: settingsModule.id,
     actions: [
       PermissionAction.READ,
@@ -463,16 +533,59 @@ async function main() {
 
   console.log('✅ Permisos creados (sistema simplificado)')
 
-  // Crear facultades y departamentos de prueba
+  // ==================== CREAR FACULTADES Y DEPARTAMENTOS CORRECTOS ====================
+  console.log('🏛️ Creando facultades y departamentos...')
+
+  // FACULTAD DE ECOTURISMO
+  const facultadEcoturismo = await prisma.facultad.create({
+    data: {
+      nombre: 'Facultad de Ecoturismo',
+      codigo: 'FE',
+      departamentos: {
+        create: [
+          { 
+            nombre: 'Departamento Académico de Contabilidad y Administración', 
+            codigo: 'DACA' 
+          },
+          { 
+            nombre: 'Departamento Académico de Ecoturismo', 
+            codigo: 'DAE' 
+          }
+        ]
+      }
+    },
+    include: {
+      departamentos: true
+    }
+  })
+
+  // FACULTAD DE INGENIERÍA
   const facultadIngenieria = await prisma.facultad.create({
     data: {
       nombre: 'Facultad de Ingeniería',
       codigo: 'FI',
       departamentos: {
         create: [
-          { nombre: 'Ingeniería de Sistemas e Informática', codigo: 'ISI' },
-          { nombre: 'Ingeniería Forestal y Medio Ambiente', codigo: 'IFMA' },
-          { nombre: 'Ingeniería Agroindustrial', codigo: 'IA' }
+          { 
+            nombre: 'Departamento Académico de Ingeniería Forestal y Medio Ambiente', 
+            codigo: 'DAIFMA' 
+          },
+          { 
+            nombre: 'Departamento Académico de Ingeniería de Sistemas e Informática', 
+            codigo: 'DAISI' 
+          },
+          { 
+            nombre: 'Departamento Académico de Ingeniería Agroindustrial', 
+            codigo: 'DAIA' 
+          },
+          { 
+            nombre: 'Departamento Académico de Medicina Veterinaria - Zootecnia', 
+            codigo: 'DAMVZ' 
+          },
+          { 
+            nombre: 'Departamento Académico de Ciencias Básicas', 
+            codigo: 'DACB' 
+          }
         ]
       }
     },
@@ -481,15 +594,47 @@ async function main() {
     }
   })
 
+  // FACULTAD DE EDUCACIÓN
   const facultadEducacion = await prisma.facultad.create({
     data: {
       nombre: 'Facultad de Educación',
-      codigo: 'FE',
+      codigo: 'FEDU',
       departamentos: {
         create: [
-          { nombre: 'Educación Primaria e Informática', codigo: 'EPI' },
-          { nombre: 'Educación Inicial y Especial', codigo: 'EIE' },
-          { nombre: 'Matemática y Computación', codigo: 'MC' }
+          // Departamentos Académicos
+          { 
+            nombre: 'Departamento Académico de Derecho y Ciencias Políticas', 
+            codigo: 'DADCP' 
+          },
+          { 
+            nombre: 'Departamento Académico de Enfermería', 
+            codigo: 'DAE' 
+          },
+          { 
+            nombre: 'Departamento Académico de Educación y Humanidades', 
+            codigo: 'DAEH' 
+          },
+          // Programas Académicos (los mantengo como departamentos según tu estructura)
+          { 
+            nombre: 'Programa Académico de Derecho y Ciencias Políticas', 
+            codigo: 'PADCP' 
+          },
+          { 
+            nombre: 'Programa Académico de Inicial y Especialidad', 
+            codigo: 'PAIE' 
+          },
+          { 
+            nombre: 'Programa Académico de Primaria e Informática', 
+            codigo: 'PAPI' 
+          },
+          { 
+            nombre: 'Programa Académico de Matemática y Computación', 
+            codigo: 'PAMC' 
+          },
+          { 
+            nombre: 'Programa Académico de Enfermería', 
+            codigo: 'PAE' 
+          }
         ]
       }
     },
@@ -498,25 +643,10 @@ async function main() {
     }
   })
 
-  const facultadECASSA = await prisma.facultad.create({
-    data: {
-      nombre: 'Facultad de Ecoturismo y Ciencias Sociales',
-      codigo: 'FECSSA',
-      departamentos: {
-        create: [
-          { nombre: 'Administración y Negocios Internacionales', codigo: 'ANI' },
-          { nombre: 'Contabilidad y Finanzas', codigo: 'CF' },
-          { nombre: 'Derecho y Ciencias Políticas', codigo: 'DCP' },
-          { nombre: 'Ecoturismo', codigo: 'ECO' }
-        ]
-      }
-    },
-    include: {
-      departamentos: true
-    }
-  })
-
-  console.log('✅ Facultades y departamentos creados')
+  console.log('✅ Facultades y departamentos creados correctamente:')
+  console.log(`  - ${facultadEcoturismo.nombre}: ${facultadEcoturismo.departamentos.length} departamentos`)
+  console.log(`  - ${facultadIngenieria.nombre}: ${facultadIngenieria.departamentos.length} departamentos`)
+  console.log(`  - ${facultadEducacion.nombre}: ${facultadEducacion.departamentos.length} departamentos/programas`)
 
   // Obtener todos los permisos creados
   const allPermissions = await prisma.permission.findMany()
@@ -524,7 +654,7 @@ async function main() {
   // Asignar permisos según roles
   console.log('🔐 Asignando permisos por rol...')
 
-  // SUPER_ADMIN - Todos los permisos con todas las acciones
+  // SUPER_ADMIN - Todos los permisos
   await prisma.userPermission.createMany({
     data: allPermissions.map(permission => ({
       userId: superAdmin.id,
@@ -541,7 +671,7 @@ async function main() {
   })
   console.log('  ✓ Super Admin: Todos los permisos')
 
-  // ADMIN - Todos los permisos excepto administración del sistema (todas las acciones)
+  // ADMIN - Todos los permisos excepto administración del sistema
   const adminPermissions = allPermissions.filter(p => p.code !== 'system.admin')
   await prisma.userPermission.createMany({
     data: adminPermissions.map(permission => ({
@@ -559,7 +689,7 @@ async function main() {
   })
   console.log('  ✓ Admin: Todos excepto system.admin')
 
-  // MODERATOR - Solo gestión de contenido y dashboard (con acciones limitadas)
+  // MODERATOR - Solo gestión de contenido y dashboard
   const moderatorPermissions = allPermissions.filter(p => 
     p.code === 'dashboard.access' ||
     p.code === 'articles.access' ||
@@ -572,12 +702,12 @@ async function main() {
       grantedBy: superAdmin.id,
       actions: permission.code === 'dashboard.access' 
         ? [PermissionAction.READ, PermissionAction.EXPORT]
-        : [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.UPDATE] // No DELETE para moderadores
+        : [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.UPDATE]
     }))
   })
   console.log('  ✓ Moderator: Dashboard y contenido')
 
-  // USER - Solo dashboard y configuración personal (solo lectura)
+  // USER - Solo dashboard y configuración personal
   const userPermissions = allPermissions.filter(p => 
     p.code === 'dashboard.access' ||
     p.code === 'settings.access'
@@ -588,8 +718,8 @@ async function main() {
       permissionId: permission.id,
       grantedBy: superAdmin.id,
       actions: permission.code === 'settings.access'
-        ? [PermissionAction.READ, PermissionAction.UPDATE] // Puede actualizar su configuración
-        : [PermissionAction.READ] // Solo ver dashboard
+        ? [PermissionAction.READ, PermissionAction.UPDATE]
+        : [PermissionAction.READ]
     }))
   })
   console.log('  ✓ User: Dashboard y configuración personal')
@@ -629,13 +759,15 @@ async function main() {
   console.log(`  - ${await prisma.submodule.count()} submódulos`)
   console.log(`  - ${await prisma.permission.count()} permisos`)
   console.log(`  - ${await prisma.userPermission.count()} asignaciones de permisos`)
+  console.log(`  - ${await prisma.facultad.count()} facultades`)
+  console.log(`  - ${await prisma.departamento.count()} departamentos/programas`)
 
   console.log('\n🎉 Seed completado exitosamente!')
   console.log('\n📝 Usuarios de prueba:')
-  console.log('  - superadmin@example.com / password123 (SUPER_ADMIN)')
-  console.log('  - admin@example.com / password123 (ADMIN)')
-  console.log('  - moderator@example.com / password123 (MODERATOR)')
-  console.log('  - user@example.com / password123 (USER)')
+  console.log('  - superadmin@unamad.edu.pe / password123 (SUPER_ADMIN)')
+  console.log('  - admin@unamad.edu.pe / password123 (ADMIN)')
+  console.log('  - moderator@unamad.edu.pe / password123 (MODERATOR)')
+  console.log('  - user@unamad.edu.pe / password123 (USER)')
 }
 
 main()

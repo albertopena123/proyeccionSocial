@@ -14,6 +14,63 @@ const createUserSchema = z.object({
   permissions: z.array(z.string()).optional()
 })
 
+// Función helper para determinar las acciones según el rol y el permiso
+function getActionsForRoleAndPermission(role: UserRole, permissionCode: string): PermissionAction[] {
+  // SUPER_ADMIN tiene todas las acciones en todos los permisos
+  if (role === UserRole.SUPER_ADMIN) {
+    return [
+      PermissionAction.CREATE,
+      PermissionAction.READ,
+      PermissionAction.UPDATE,
+      PermissionAction.DELETE,
+      PermissionAction.EXPORT
+    ]
+  }
+
+  // ADMIN tiene todas las acciones excepto en ciertos permisos críticos
+  if (role === UserRole.ADMIN) {
+    // Para la mayoría de permisos, dar todas las acciones
+    return [
+      PermissionAction.CREATE,
+      PermissionAction.READ,
+      PermissionAction.UPDATE,
+      PermissionAction.DELETE,
+      PermissionAction.EXPORT
+    ]
+  }
+
+  // MODERATOR tiene acciones limitadas según el tipo de permiso
+  if (role === UserRole.MODERATOR) {
+    if (permissionCode === 'dashboard.access') {
+      return [PermissionAction.READ, PermissionAction.EXPORT]
+    }
+    // Para contenido, constancias y resoluciones
+    if (permissionCode.includes('articles') || permissionCode.includes('categories') || 
+        permissionCode.includes('constancias') || permissionCode.includes('resoluciones')) {
+      return [
+        PermissionAction.CREATE,
+        PermissionAction.READ,
+        PermissionAction.UPDATE,
+        PermissionAction.EXPORT
+      ]
+    }
+    // Por defecto para moderador
+    return [PermissionAction.READ]
+  }
+
+  // USER tiene las acciones más limitadas
+  if (role === UserRole.USER) {
+    if (permissionCode === 'settings.access') {
+      return [PermissionAction.READ, PermissionAction.UPDATE]
+    }
+    // Por defecto para usuario regular
+    return [PermissionAction.READ]
+  }
+
+  // Por defecto, solo lectura
+  return [PermissionAction.READ]
+}
+
 // GET /api/users - Obtener todos los usuarios
 export async function GET() {
   try {
@@ -101,21 +158,69 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Asignar permisos si se especificaron
+    // Obtener todos los permisos disponibles
+    const allPermissions = await prisma.permission.findMany()
+
+    // Definir los permisos por defecto según el rol
+    let defaultPermissions: typeof allPermissions = []
+    
+    switch (validatedData.role) {
+      case UserRole.SUPER_ADMIN:
+        // SUPER_ADMIN - Todos los permisos con todas las acciones
+        defaultPermissions = allPermissions
+        break
+        
+      case UserRole.ADMIN:
+        // ADMIN - Todos los permisos excepto administración del sistema
+        defaultPermissions = allPermissions.filter(p => p.code !== 'system.admin')
+        break
+        
+      case UserRole.MODERATOR:
+        // MODERATOR - Dashboard, contenido (artículos y categorías), constancias y resoluciones
+        defaultPermissions = allPermissions.filter(p => 
+          p.code === 'dashboard.access' ||
+          p.code === 'articles.access' ||
+          p.code === 'categories.access' ||
+          p.code === 'constancias.access' ||
+          p.code === 'resoluciones.access'
+        )
+        break
+        
+      case UserRole.USER:
+        // USER - Solo dashboard y configuración personal
+        defaultPermissions = allPermissions.filter(p => 
+          p.code === 'dashboard.access' ||
+          p.code === 'settings.access'
+        )
+        break
+    }
+
+    // Si se especificaron permisos adicionales, combinarlos con los por defecto
     if (validatedData.permissions && validatedData.permissions.length > 0) {
-      const permissions = await prisma.permission.findMany({
+      const additionalPermissions = await prisma.permission.findMany({
         where: {
           id: {
             in: validatedData.permissions
           }
         }
       })
+      // Combinar y eliminar duplicados
+      const combinedPermissionIds = new Set([
+        ...defaultPermissions.map(p => p.id),
+        ...additionalPermissions.map(p => p.id)
+      ])
+      defaultPermissions = allPermissions.filter(p => combinedPermissionIds.has(p.id))
+    }
 
+    // Asignar los permisos al usuario
+    if (defaultPermissions.length > 0) {
       await prisma.userPermission.createMany({
-        data: permissions.map(permission => ({
+        data: defaultPermissions.map(permission => ({
           userId: newUser.id,
           permissionId: permission.id,
-          grantedBy: session.user.id
+          grantedBy: session.user.id,
+          // Definir las acciones según el rol y el tipo de permiso
+          actions: getActionsForRoleAndPermission(validatedData.role, permission.code)
         }))
       })
     }

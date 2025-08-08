@@ -47,18 +47,31 @@ export async function GET(
       throw new Error(`Error al obtener datos: ${response.status}`)
     }
 
-    const data = await response.json()
+    const responseData = await response.json()
+
+    // La API ahora devuelve un objeto con status, data (array) y message
+    if (responseData.status !== 'success' || !responseData.data || responseData.data.length === 0) {
+      return NextResponse.json(
+        { error: "No se encontraron datos para este DNI" },
+        { status: 404 }
+      )
+    }
+
+    // Tomar el primer elemento del array data
+    const studentData = responseData.data[0]
+    const info = studentData.info
 
     // Mapear los datos al formato esperado por el formulario
     const mappedData = {
-      studentCode: data.userName || '',
-      name: `${data.name || ''} ${data.paternalSurname || ''} ${data.maternalSurname || ''}`.trim(),
+      studentCode: info.username || '',
+      name: `${info.name || ''} ${info.paternalSurname || ''} ${info.maternalSurname || ''}`.trim(),
       documentType: 'DNI',
-      documentNumber: data.dni || dni,
-      email: data.email || '',
-      personalEmail: data.personalEmail || '',
-      career: data.carrerName || '',
-      faculty: data.facultyName || '',
+      documentNumber: info.dni || dni,
+      email: info.email || '',
+      personalEmail: info.personalEmail || '',
+      career: info.carrerName || '',
+      faculty: info.facultyName || '',
+      totalCreditsApproved: studentData.totalCreditsApproved || 0,
       // Los siguientes campos no vienen en esta API, serán completados con la otra
       sex: '',
       careerCode: '',

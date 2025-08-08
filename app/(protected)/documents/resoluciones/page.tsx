@@ -35,6 +35,7 @@ export default async function ResolucionesPage() {
             departamento: true,
             docentes: true,
             estudiantes: true,
+            archivos: true, // Incluir archivos relacionados
             createdBy: {
                 select: {
                     id: true,
@@ -85,6 +86,7 @@ export default async function ResolucionesPage() {
             initialData={resolucionesSerializables}
             permissions={permissions}
             currentUserId={session.user.id}
+            currentUserRole={session.user.role}
             facultades={facultades}
             facultadesParaTabla={facultadesParaTabla}
         />

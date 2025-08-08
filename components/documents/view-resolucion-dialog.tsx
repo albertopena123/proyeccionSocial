@@ -218,7 +218,7 @@ export function ViewResolucionDialog({ resolucion, open, onOpenChange }: ViewRes
                                         {resolucion.docentes.map((docente, index) => (
                                             <div key={index} className="flex items-center gap-2 text-sm">
                                                 <IconUser className="h-4 w-4 text-muted-foreground" />
-                                                <span>{docente.nombres} {docente.apellidos}</span>
+                                                <span>{docente.apellidos} {docente.nombres}</span>
                                                 <span className="text-muted-foreground">({docente.dni})</span>
                                             </div>
                                         ))}
@@ -237,7 +237,7 @@ export function ViewResolucionDialog({ resolucion, open, onOpenChange }: ViewRes
                                         {resolucion.estudiantes.map((estudiante, index) => (
                                             <div key={index} className="flex items-center gap-2 text-sm">
                                                 <IconUser className="h-4 w-4 text-muted-foreground" />
-                                                <span>{estudiante.nombres} {estudiante.apellidos}</span>
+                                                <span>{estudiante.apellidos} {estudiante.nombres}</span>
                                                 <span className="text-muted-foreground">
                                                     ({estudiante.codigo}{estudiante.dni ? ` - ${estudiante.dni}` : ''})
                                                 </span>

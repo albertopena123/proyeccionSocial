@@ -1,0 +1,41 @@
+====================================================
+INSTRUCCIONES PARA AGREGAR LAS IMÁGENES DEL CARRUSEL
+====================================================
+
+PASO 1: GUARDA LAS SIGUIENTES IMÁGENES EN ESTA CARPETA
+--------------------------------------------------------
+1. main1.jpg - Primera imagen (la foto grupal de Responsabilidad Social que compartiste)
+2. main2.jpg - Segunda imagen 
+3. main3.jpg - Tercera imagen
+
+IMPORTANTE: Los nombres deben ser EXACTAMENTE:
+- main1.jpg (todo en minúsculas)
+- main2.jpg (todo en minúsculas)
+- main3.jpg (todo en minúsculas)
+
+PASO 2: CÓMO AGREGAR LAS IMÁGENES
+---------------------------------
+Opción A - Desde Windows:
+1. Abre el explorador de Windows
+2. Navega a: D:\proyeccionSocial\public\images\
+3. Copia y pega las imágenes aquí con los nombres correctos
+
+Opción B - Arrastra y suelta:
+1. Abre la carpeta D:\proyeccionSocial\public\images\
+2. Arrastra las imágenes desde tu computadora
+3. Renómbralas a main1.jpg, main2.jpg, main3.jpg
+
+PASO 3: VERIFICAR
+-----------------
+1. Actualiza la página en el navegador (F5)
+2. Las imágenes deberían aparecer automáticamente en el carrusel
+3. Si no aparecen, verifica que los nombres sean exactos
+
+NOTAS:
+------
+- Las imágenes deben estar en formato JPG
+- Se recomienda que tengan un tamaño de 1920x600 píxeles o similar
+- Si las imágenes no se cargan, el sistema mostrará imágenes temporales de respaldo
+- Para mejor rendimiento, las imágenes no deben pesar más de 500KB cada una
+
+====================================================

@@ -16,6 +16,7 @@ interface ResolucionesPageClientProps {
         canRead: boolean
     }
     currentUserId: string
+    currentUserRole?: string
     facultades: any[]
     facultadesParaTabla: any[]
 }
@@ -24,6 +25,7 @@ export function ResolucionesPageClient({
     initialData, 
     permissions, 
     currentUserId,
+    currentUserRole,
     facultades,
     facultadesParaTabla
 }: ResolucionesPageClientProps) {
@@ -108,6 +110,7 @@ export function ResolucionesPageClient({
                     data={resoluciones}
                     permissions={permissions}
                     currentUserId={currentUserId}
+                    currentUserRole={currentUserRole}
                     facultades={facultadesParaTabla}
                 />
             </div>

@@ -122,6 +122,15 @@ interface Resolucion {
         nombres: string
         apellidos: string
     }>
+    archivos?: Array<{
+        id: string
+        fileName: string
+        fileUrl: string
+        fileSize?: number | null
+        fileMimeType?: string | null
+        tipo?: string | null
+        createdAt: Date | string
+    }>
     createdBy: {
         id: string
         name: string | null
@@ -146,8 +155,9 @@ interface EditResolucionDialogProps {
 
 export function EditResolucionDialog({ resolucion, facultades, open, onOpenChange }: EditResolucionDialogProps) {
     const [isLoading, setIsLoading] = React.useState(false)
-    const [file, setFile] = React.useState<File | null>(null)
-    const [fileName, setFileName] = React.useState<string>(resolucion?.fileName || "")
+    const [newFiles, setNewFiles] = React.useState<File[]>([])
+    const [existingFiles, setExistingFiles] = React.useState(resolucion?.archivos || [])
+    const [filesToDelete, setFilesToDelete] = React.useState<string[]>([])
     const [estudiantes, setEstudiantes] = React.useState<Estudiante[]>(resolucion?.estudiantes || [])
     const [docentes, setDocentes] = React.useState<Docente[]>(resolucion?.docentes || [])
     const [selectedFacultad, setSelectedFacultad] = React.useState<string>(resolucion?.facultad?.id?.toString() || resolucion?.facultadId?.toString() || "")
@@ -340,10 +350,13 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                 return
             }
 
-            if (file && file.size > 5 * 1024 * 1024) {
-                toast.error("El archivo no debe superar los 5MB")
-                setIsLoading(false)
-                return
+            // Validar tamaño de nuevos archivos
+            for (const file of newFiles) {
+                if (file.size > 5 * 1024 * 1024) {
+                    toast.error(`El archivo ${file.name} supera los 5MB`)
+                    setIsLoading(false)
+                    return
+                }
             }
 
             // Crear FormData
@@ -379,9 +392,16 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                 }
             }
 
-            // Agregar archivo si hay uno nuevo
-            if (file) {
-                formData.append('file', file)
+            // Agregar archivos nuevos
+            if (newFiles.length > 0) {
+                newFiles.forEach(file => {
+                    formData.append('files', file)
+                })
+            }
+            
+            // Agregar archivos a eliminar
+            if (filesToDelete.length > 0) {
+                formData.append('filesToDelete', JSON.stringify(filesToDelete))
             }
 
             const response = await fetch(`/api/documents/resoluciones/${resolucion.id}`, {
@@ -405,24 +425,43 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
     }
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const selectedFile = e.target.files?.[0]
-        if (selectedFile) {
+        const selectedFiles = e.target.files
+        if (selectedFiles) {
             const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
-            if (!allowedTypes.includes(selectedFile.type)) {
-                toast.error("Solo se permiten archivos PDF, JPG, JPEG o PNG")
-                e.target.value = ''
-                setFile(null)
-                return
+            const validFiles: File[] = []
+            
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i]
+                
+                if (!allowedTypes.includes(file.type)) {
+                    toast.error(`El archivo ${file.name} no es un tipo permitido. Solo PDF, JPG, JPEG o PNG`)
+                    continue
+                }
+                
+                if (file.size > 5 * 1024 * 1024) {
+                    toast.error(`El archivo ${file.name} supera los 5MB`)
+                    continue
+                }
+                
+                validFiles.push(file)
             }
-            if (selectedFile.size > 5 * 1024 * 1024) {
-                toast.error("El archivo no debe superar los 5MB")
-                e.target.value = ''
-                setFile(null)
-                return
+            
+            if (validFiles.length > 0) {
+                setNewFiles([...newFiles, ...validFiles])
+                toast.success(`${validFiles.length} archivo(s) agregado(s)`)
             }
-            setFile(selectedFile)
-            setFileName(selectedFile.name)
+            
+            e.target.value = '' // Limpiar el input
         }
+    }
+    
+    const removeExistingFile = (fileId: string) => {
+        setFilesToDelete([...filesToDelete, fileId])
+        setExistingFiles(existingFiles.filter(f => f.id !== fileId))
+    }
+    
+    const removeNewFile = (index: number) => {
+        setNewFiles(newFiles.filter((_, i) => i !== index))
     }
 
     if (!resolucion) return null
@@ -966,6 +1005,7 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                         onChange={handleFileChange}
                                         className="hidden"
                                         id="file-upload-edit"
+                                        multiple
                                         disabled={isLoading}
                                     />
                                     <label
@@ -973,24 +1013,68 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                         className="flex items-center gap-2 px-4 py-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md cursor-pointer transition-colors"
                                     >
                                         <Upload className="h-4 w-4" />
-                                        <span>{fileName || "Cambiar archivo"}</span>
+                                        <span>Agregar archivos</span>
                                     </label>
-                                    {file && (
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => {
-                                                setFile(null)
-                                                setFileName(resolucion.fileName || "")
-                                            }}
-                                        >
-                                            Quitar
-                                        </Button>
-                                    )}
                                 </div>
+                                
+                                {/* Archivos existentes */}
+                                {existingFiles.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium">Archivos actuales:</p>
+                                        <div className="space-y-1">
+                                            {existingFiles.map((file) => (
+                                                <div key={file.id} className="flex items-center justify-between p-2 border rounded-md">
+                                                    <span className="text-sm truncate flex-1">
+                                                        {file.tipo || file.fileName}
+                                                    </span>
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => window.open(file.fileUrl, '_blank')}
+                                                        >
+                                                            Ver
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => removeExistingFile(file.id)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {/* Nuevos archivos */}
+                                {newFiles.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium">Nuevos archivos:</p>
+                                        <div className="space-y-1">
+                                            {newFiles.map((file, index) => (
+                                                <div key={index} className="flex items-center justify-between p-2 border rounded-md">
+                                                    <span className="text-sm truncate flex-1">{file.name}</span>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => removeNewFile(index)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                
                                 <p className="text-xs text-muted-foreground">
-                                    Formatos permitidos: PDF, JPG, PNG (máx. 5MB). Dejar vacío para mantener el archivo actual.
+                                    Formatos permitidos: PDF, JPG, PNG (máx. 5MB por archivo)
                                 </p>
                             </div>
 

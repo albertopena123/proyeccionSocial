@@ -36,31 +36,31 @@ enum PermissionAction {
 model User {
   id            String    @id @default(cuid())
   email         String    @unique // Correo institucional (nombre.unamad.edu.pe)
-  personalEmail String?   // Correo personal adicional
+  personalEmail String? // Correo personal adicional
   password      String?   @db.Text
-  name          String?   // Nombre completo
+  name          String? // Nombre completo
   image         String?
   emailVerified DateTime?
-  
+
   // Datos personales
-  documentType  String?   // Tipo de documento: DNI, CE (Carnet de Extranjería), PASAPORTE
-  documentNumber String?   @unique // Número de documento
-  sex           String?   // Sexo: M (Masculino), F (Femenino)
-  
+  documentType   String? // Tipo de documento: DNI, CE (Carnet de Extranjería), PASAPORTE
+  documentNumber String? @unique // Número de documento
+  sex            String? // Sexo: M (Masculino), F (Femenino)
+
   // Datos académicos
-  studentCode   String?   @unique // Código de estudiante
-  dni           String?   @unique // DNI (LEGACY: usar documentNumber en su lugar)
-  faculty       String?   // Facultad
-  career        String?   // Carrera
-  careerCode    String?   // Código de carrera
-  enrollmentDate String?   // Periodo de ingreso (ej: "2013-1", "2018-2")
-  
+  studentCode    String? @unique // Código de estudiante
+  dni            String? @unique // DNI (LEGACY: usar documentNumber en su lugar)
+  faculty        String? // Facultad
+  career         String? // Carrera
+  careerCode     String? // Código de carrera
+  enrollmentDate String? // Periodo de ingreso (ej: "2013-1", "2018-2")
+
   // Estado de la cuenta
-  isActive      Boolean   @default(false) // Inactivo hasta verificación
+  isActive          Boolean @default(false) // Inactivo hasta verificación
   verificationToken String? // Token para verificación de email
-  
+
   // Recuperación de contraseña
-  resetPasswordToken String? // Token para resetear contraseña
+  resetPasswordToken   String? // Token para resetear contraseña
   resetPasswordExpires DateTime? // Expiración del token
 
   // OAuth
@@ -75,8 +75,8 @@ model User {
   preferences UserPreferences?
 
   // Documentos
-  constanciasCreadas   Constancia[] @relation("ConstanciasCreadas")
-  constanciasAprobadas Constancia[] @relation("ConstanciasAprobadas")
+  constanciasCreadas    Constancia[] @relation("ConstanciasCreadas")
+  constanciasAprobadas  Constancia[] @relation("ConstanciasAprobadas")
   resolucionesCreadas   Resolucion[] @relation("ResolucionesCreadas")
   resolucionesAprobadas Resolucion[] @relation("ResolucionesAprobadas")
 
@@ -355,44 +355,45 @@ enum ModalidadResolucion {
   ESTUDIANTES
   VOLUNTARIADO
   ACTIVIDAD
+  EXTERNOS // <-- AGREGAR ESTA LÍNEA
 }
 
 // Modelo para Constancias
 model Constancia {
-  id               String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Datos del estudiante
-  studentCode      String   // Código de estudiante
-  fullName         String   // Nombre completo
-  dni              String   // DNI
-  
+  studentCode String // Código de estudiante
+  fullName    String // Nombre completo
+  dni         String // DNI
+
   // Datos del documento
-  constanciaNumber String   @unique // Número de constancia
-  year             Int      // Año
-  observation      String?  @db.Text // Observaciones
-  
+  constanciaNumber String  @unique // Número de constancia
+  year             Int // Año
+  observation      String? @db.Text // Observaciones
+
   // Archivo
-  fileName         String?  // Nombre del archivo
-  fileUrl          String?  // URL del archivo
-  fileSize         Int?     // Tamaño en bytes
-  fileMimeType     String?  // Tipo MIME del archivo
-  
+  fileName     String? // Nombre del archivo
+  fileUrl      String? // URL del archivo
+  fileSize     Int? // Tamaño en bytes
+  fileMimeType String? // Tipo MIME del archivo
+
   // Estado y tipo
-  status           DocumentStatus @default(PENDIENTE)
-  type             DocumentType  @default(CONSTANCIA)
-  
+  status DocumentStatus @default(PENDIENTE)
+  type   DocumentType   @default(CONSTANCIA)
+
   // Relaciones
-  createdById      String   // Usuario que creó la constancia
-  createdBy        User     @relation("ConstanciasCreadas", fields: [createdById], references: [id])
-  
-  approvedById     String?  // Usuario que aprobó (si aplica)
-  approvedBy       User?    @relation("ConstanciasAprobadas", fields: [approvedById], references: [id])
-  
+  createdById String // Usuario que creó la constancia
+  createdBy   User   @relation("ConstanciasCreadas", fields: [createdById], references: [id])
+
+  approvedById String? // Usuario que aprobó (si aplica)
+  approvedBy   User?   @relation("ConstanciasAprobadas", fields: [approvedById], references: [id])
+
   // Timestamps
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  approvedAt       DateTime? // Fecha de aprobación
-  
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  approvedAt DateTime? // Fecha de aprobación
+
   // Índices para búsquedas
   @@index([studentCode])
   @@index([dni])
@@ -407,89 +408,90 @@ model Constancia {
 
 // Modelo para Facultades
 model Facultad {
-  id            Int           @id @default(autoincrement())
-  nombre        String        @unique
-  codigo        String?       @unique
-  isActive      Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  
+  id        Int      @id @default(autoincrement())
+  nombre    String   @unique
+  codigo    String?  @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relaciones
   departamentos Departamento[]
   resoluciones  Resolucion[]
-  
+
   @@index([nombre])
 }
 
 // Modelo para Departamentos
 model Departamento {
-  id          Int         @id @default(autoincrement())
-  nombre      String
-  codigo      String?
-  facultadId  Int
-  isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  
+  id         Int      @id @default(autoincrement())
+  nombre     String
+  codigo     String?
+  facultadId Int
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
   // Relaciones
-  facultad    Facultad    @relation(fields: [facultadId], references: [id])
+  facultad     Facultad     @relation(fields: [facultadId], references: [id])
   resoluciones Resolucion[]
-  
+
   @@unique([nombre, facultadId])
   @@index([facultadId])
 }
 
 // Modelo para Resoluciones
 model Resolucion {
-  id                String              @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Tipo y número
-  tipoResolucion    TipoResolucion      // APROBACION_PROYECTO o APROBACION_INFORME_FINAL
-  numeroResolucion  String              @unique
-  fechaResolucion   DateTime
-  
+  tipoResolucion   TipoResolucion // APROBACION_PROYECTO o APROBACION_INFORME_FINAL
+  numeroResolucion String         @unique
+  fechaResolucion  DateTime
+
   // Modalidad y financiamiento
-  modalidad         ModalidadResolucion // DOCENTES, ESTUDIANTES, VOLUNTARIADO, ACTIVIDAD
-  esFinanciado      Boolean             @default(false)
-  monto             Decimal?            @db.Decimal(10, 2) // Solo si esFinanciado = true
-  
+  modalidad    ModalidadResolucion // DOCENTES, ESTUDIANTES, VOLUNTARIADO, ACTIVIDAD
+  esFinanciado Boolean             @default(false)
+  monto        Decimal?            @db.Decimal(10, 2) // Solo si esFinanciado = true
+
   // Datos del asesor
-  dniAsesor         String
-  nombreAsesor      String
-  
+  dniAsesor    String
+  nombreAsesor String
+
   // Datos del proyecto
-  tituloProyecto    String              @db.Text
-  
+  tituloProyecto String @db.Text
+
   // Relaciones con facultad y departamento
-  facultadId        Int
-  departamentoId    Int
-  
+  facultadId     Int
+  departamentoId Int
+
   // Archivo
-  fileName          String?             // Nombre del archivo
-  fileUrl           String?             // URL del archivo
-  fileSize          Int?                // Tamaño en bytes
-  fileMimeType      String?             // Tipo MIME del archivo
-  
+  fileName     String? // Nombre del archivo
+  fileUrl      String? // URL del archivo
+  fileSize     Int? // Tamaño en bytes
+  fileMimeType String? // Tipo MIME del archivo
+
   // Estado
-  status            DocumentStatus      @default(PENDIENTE)
-  
+  status DocumentStatus @default(PENDIENTE)
+
   // Relaciones
-  facultad          Facultad            @relation(fields: [facultadId], references: [id])
-  departamento      Departamento        @relation(fields: [departamentoId], references: [id])
-  docentes          DocenteResolucion[]
-  estudiantes       EstudianteResolucion[]
-  
-  createdById       String              // Usuario que creó la resolución
-  createdBy         User                @relation("ResolucionesCreadas", fields: [createdById], references: [id])
-  
-  approvedById      String?             // Usuario que aprobó (si aplica)
-  approvedBy        User?               @relation("ResolucionesAprobadas", fields: [approvedById], references: [id])
-  
+  facultad     Facultad               @relation(fields: [facultadId], references: [id])
+  departamento Departamento           @relation(fields: [departamentoId], references: [id])
+  docentes     DocenteResolucion[]
+  estudiantes  EstudianteResolucion[]
+
+  createdById String // Usuario que creó la resolución
+  createdBy   User   @relation("ResolucionesCreadas", fields: [createdById], references: [id])
+
+  approvedById String? // Usuario que aprobó (si aplica)
+  approvedBy   User?               @relation("ResolucionesAprobadas", fields: [approvedById], references: [id])
+  archivos     ArchivoResolucion[] // Una resolución puede tener múltiples archivos
+
   // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  approvedAt        DateTime?           // Fecha de aprobación
-  
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  approvedAt DateTime? // Fecha de aprobación
+
   // Índices para búsquedas
   @@index([numeroResolucion])
   @@index([tipoResolucion])
@@ -504,37 +506,53 @@ model Resolucion {
 
 // Modelo para docentes participantes en resoluciones
 model DocenteResolucion {
-  id            String      @id @default(cuid())
-  resolucionId  String
-  dni           String      // DNI del docente
-  nombres       String      // Nombres completos
-  apellidos     String      // Apellidos completos
-  email         String?     // Email institucional
-  facultad      String?     // Facultad del docente
-  
+  id           String  @id @default(cuid())
+  resolucionId String
+  dni          String // DNI del docente
+  nombres      String // Nombres completos
+  apellidos    String // Apellidos completos
+  email        String? // Email institucional
+  facultad     String? // Facultad del docente
+
   // Relación
-  resolucion    Resolucion  @relation(fields: [resolucionId], references: [id], onDelete: Cascade)
-  
-  createdAt     DateTime    @default(now())
-  
+  resolucion Resolucion @relation(fields: [resolucionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
   @@unique([resolucionId, dni]) // Un docente no puede estar duplicado en la misma resolución
   @@index([resolucionId])
 }
 
 // Modelo para estudiantes participantes en resoluciones
 model EstudianteResolucion {
-  id            String      @id @default(cuid())
-  resolucionId  String
-  dni           String      // DNI del estudiante
-  codigo        String      // Código del estudiante
-  nombres       String      // Nombres completos
-  apellidos     String      // Apellidos completos
-  
+  id           String @id @default(cuid())
+  resolucionId String
+  dni          String // DNI del estudiante
+  codigo       String // Código del estudiante
+  nombres      String // Nombres completos
+  apellidos    String // Apellidos completos
+
   // Relación
-  resolucion    Resolucion  @relation(fields: [resolucionId], references: [id], onDelete: Cascade)
-  
-  createdAt     DateTime    @default(now())
-  
+  resolucion Resolucion @relation(fields: [resolucionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
   @@unique([resolucionId, codigo]) // Un estudiante no puede estar duplicado en la misma resolución
+  @@index([resolucionId])
+}
+
+model ArchivoResolucion {
+  id           String  @id @default(cuid())
+  resolucionId String
+  fileName     String
+  fileUrl      String
+  fileSize     Int?
+  fileMimeType String?
+  tipo         String? // 'resolucion', 'acta', 'anexo', etc.
+
+  resolucion Resolucion @relation(fields: [resolucionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
   @@index([resolucionId])
 }

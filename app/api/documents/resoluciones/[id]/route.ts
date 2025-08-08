@@ -33,6 +33,7 @@ export async function GET(
                 departamento: true,
                 estudiantes: true,
                 docentes: true,
+                archivos: true,
                 createdBy: {
                     select: {
                         id: true,
@@ -86,12 +87,21 @@ export async function PUT(
             return NextResponse.json({ error: "Sin permisos para actualizar resoluciones" }, { status: 403 })
         }
 
-        // Verificar que la resolución existe y no está aprobada
+        // Obtener el usuario para verificar si es SUPER_ADMIN
+        const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { role: true }
+        })
+
+        const isSuperAdmin = user?.role === 'SUPER_ADMIN'
+
+        // Verificar que la resolución existe
         const existingResolucion = await prisma.resolucion.findUnique({
             where: { id },
             include: { 
                 estudiantes: true,
-                docentes: true 
+                docentes: true,
+                archivos: true 
             }
         })
 
@@ -99,7 +109,8 @@ export async function PUT(
             return NextResponse.json({ error: "Resolución no encontrada" }, { status: 404 })
         }
 
-        if (existingResolucion.status === 'APROBADO') {
+        // Solo verificar el estado aprobado si NO es SUPER_ADMIN
+        if (!isSuperAdmin && existingResolucion.status === 'APROBADO') {
             return NextResponse.json(
                 { error: "No se puede editar una resolución aprobada" },
                 { status: 400 }
@@ -122,7 +133,8 @@ export async function PUT(
         const departamentoId = parseInt(formData.get('departamentoId') as string)
         const estudiantesJson = formData.get('estudiantes') as string | null
         const docentesJson = formData.get('docentes') as string | null
-        const file = formData.get('file') as File | null
+        const files = formData.getAll('files') as File[]
+        const filesToDeleteJson = formData.get('filesToDelete') as string | null
 
         // Verificar si el número de resolución cambio y no está duplicado
         if (numeroResolucion !== existingResolucion.numeroResolucion) {
@@ -138,31 +150,37 @@ export async function PUT(
             }
         }
 
-        // Procesar archivo si existe uno nuevo
-        let fileName = existingResolucion.fileName
-        let fileUrl = existingResolucion.fileUrl
-        let fileSize = existingResolucion.fileSize
-        let fileMimeType = existingResolucion.fileMimeType
-
-        if (file && file.size > 0) {
-            // Validar tipo de archivo
-            const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
-            if (!allowedTypes.includes(file.type)) {
-                return NextResponse.json(
-                    { error: "Tipo de archivo no permitido" },
-                    { status: 400 }
-                )
+        // Procesar archivos a eliminar
+        let filesToDelete: string[] = []
+        if (filesToDeleteJson) {
+            try {
+                filesToDelete = JSON.parse(filesToDeleteJson)
+            } catch (e) {
+                console.error("Error parseando archivos a eliminar:", e)
             }
+        }
 
-            // Validar tamaño (5MB)
-            if (file.size > 5 * 1024 * 1024) {
-                return NextResponse.json(
-                    { error: "El archivo no debe superar los 5MB" },
-                    { status: 400 }
-                )
-            }
+        // Eliminar archivos marcados para borrar
+        if (filesToDelete.length > 0) {
+            await prisma.archivoResolucion.deleteMany({
+                where: {
+                    id: { in: filesToDelete },
+                    resolucionId: id
+                }
+            })
+        }
 
-            // Importar módulos necesarios para guardar archivo en sistema de archivos
+        // Procesar nuevos archivos
+        const archivosParaGuardar: Array<{
+            fileName: string
+            fileUrl: string
+            fileSize: number
+            fileMimeType: string
+            tipo?: string
+        }> = []
+
+        if (files && files.length > 0) {
+            // Importar módulos necesarios
             const path = await import('path')
             const { writeFile, mkdir } = await import('fs/promises')
             const { existsSync } = await import('fs')
@@ -173,34 +191,59 @@ export async function PUT(
                 await mkdir(uploadDir, { recursive: true })
             }
 
-            // Si hay un archivo anterior en el sistema de archivos, intentar eliminarlo
-            if (existingResolucion.fileUrl && existingResolucion.fileUrl.startsWith('/uploads/')) {
-                try {
-                    const { unlink } = await import('fs/promises')
-                    const oldFilePath = path.join(process.cwd(), 'public', existingResolucion.fileUrl)
-                    if (existsSync(oldFilePath)) {
-                        await unlink(oldFilePath)
+            for (const file of files) {
+                if (file.size > 0) {
+                    // Validar tipo de archivo
+                    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
+                    if (!allowedTypes.includes(file.type)) {
+                        return NextResponse.json(
+                            { error: `Tipo de archivo no permitido: ${file.name}` },
+                            { status: 400 }
+                        )
                     }
-                } catch (error) {
-                    console.error("Error eliminando archivo anterior:", error)
+
+                    // Validar tamaño (5MB)
+                    if (file.size > 5 * 1024 * 1024) {
+                        return NextResponse.json(
+                            { error: `El archivo ${file.name} supera los 5MB` },
+                            { status: 400 }
+                        )
+                    }
+
+                    // Generar nombre único para el archivo
+                    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+                    const fileExtension = path.extname(file.name)
+                    const savedFileName = `${uniqueSuffix}${fileExtension}`
+                    const filePath = path.join(uploadDir, savedFileName)
+
+                    // Guardar archivo
+                    const bytes = await file.arrayBuffer()
+                    const buffer = Buffer.from(bytes)
+                    await writeFile(filePath, buffer)
+
+                    archivosParaGuardar.push({
+                        fileName: file.name,
+                        fileUrl: `/api/documents/files/resoluciones/${savedFileName}`,
+                        fileSize: file.size,
+                        fileMimeType: file.type,
+                        tipo: file.type.includes('pdf') ? 'resolucion' : 'anexo'
+                    })
                 }
             }
+        }
 
-            // Generar nombre único para el archivo
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-            const fileExtension = path.extname(file.name)
-            fileName = file.name
-            const savedFileName = `${uniqueSuffix}${fileExtension}`
-            const filePath = path.join(uploadDir, savedFileName)
-
-            // Guardar archivo
-            const bytes = await file.arrayBuffer()
-            const buffer = Buffer.from(bytes)
-            await writeFile(filePath, buffer)
-
-            fileUrl = `/api/documents/files/resoluciones/${savedFileName}`
-            fileSize = file.size
-            fileMimeType = file.type
+        // Mantener compatibilidad con campos legacy
+        let fileName = existingResolucion.fileName
+        let fileUrl = existingResolucion.fileUrl
+        let fileSize = existingResolucion.fileSize
+        let fileMimeType = existingResolucion.fileMimeType
+        
+        // Si hay archivos nuevos y no hay archivos existentes, usar el primero para los campos legacy
+        if (archivosParaGuardar.length > 0 && (!existingResolucion.archivos || existingResolucion.archivos.length === 0)) {
+            fileName = archivosParaGuardar[0].fileName
+            fileUrl = archivosParaGuardar[0].fileUrl
+            fileSize = archivosParaGuardar[0].fileSize
+            fileMimeType = archivosParaGuardar[0].fileMimeType
         }
 
         // Parsear estudiantes si existen
@@ -262,6 +305,10 @@ export async function PUT(
                         email: doc.email || null,
                         facultad: doc.facultad || null
                     }))
+                },
+                // Agregar nuevos archivos
+                archivos: {
+                    create: archivosParaGuardar
                 }
             },
             include: {
@@ -269,6 +316,7 @@ export async function PUT(
                 departamento: true,
                 estudiantes: true,
                 docentes: true,
+                archivos: true,
                 createdBy: {
                     select: {
                         id: true,

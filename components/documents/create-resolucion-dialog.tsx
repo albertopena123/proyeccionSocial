@@ -98,8 +98,7 @@ interface CreateResolucionDialogProps {
 export function CreateResolucionDialog({ children, facultades, onSuccess }: CreateResolucionDialogProps) {
     const [open, setOpen] = React.useState(false)
     const [isLoading, setIsLoading] = React.useState(false)
-    const [file, setFile] = React.useState<File | null>(null)
-    const [fileName, setFileName] = React.useState<string>("")
+    const [files, setFiles] = React.useState<File[]>([])
     const [estudiantes, setEstudiantes] = React.useState<Estudiante[]>([])
     const [docentes, setDocentes] = React.useState<Docente[]>([])
     const [selectedFacultad, setSelectedFacultad] = React.useState<string>("")
@@ -307,11 +306,13 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                 return
             }
 
-            // Validar tamaño del archivo antes de enviar
-            if (file && file.size > 5 * 1024 * 1024) {
-                toast.error("El archivo no debe superar los 5MB")
-                setIsLoading(false)
-                return
+            // Validar tamaño de los archivos antes de enviar
+            for (const file of files) {
+                if (file.size > 5 * 1024 * 1024) {
+                    toast.error(`El archivo ${file.name} no debe superar los 5MB`)
+                    setIsLoading(false)
+                    return
+                }
             }
 
             // Crear FormData para enviar archivo y datos
@@ -348,9 +349,11 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                 }
             }
 
-            // Agregar archivo si existe
-            if (file) {
-                formData.append('file', file)
+            // Agregar archivos si existen
+            if (files.length > 0) {
+                files.forEach((file, index) => {
+                    formData.append(`files`, file)
+                })
             }
 
             const response = await fetch("/api/documents/resoluciones", {
@@ -375,8 +378,7 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
             // Cerrar el diálogo y resetear el formulario
             setOpen(false)
             form.reset()
-            setFile(null)
-            setFileName("")
+            setFiles([])
             setEstudiantes([])
             setDocentes([])
             setShowDocentes(false)
@@ -388,27 +390,35 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
         }
     }
 
-    // Manejar la selección de archivo
+    // Manejar la selección de archivos
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const selectedFile = e.target.files?.[0]
-        if (selectedFile) {
+        const selectedFiles = e.target.files
+        if (selectedFiles) {
             const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
-            if (!allowedTypes.includes(selectedFile.type)) {
-                toast.error("Solo se permiten archivos PDF, JPG, JPEG o PNG")
-                e.target.value = '' // Limpiar el input
-                setFile(null)
-                setFileName("")
-                return
+            const newFiles: File[] = []
+            
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i]
+                
+                if (!allowedTypes.includes(file.type)) {
+                    toast.error(`El archivo ${file.name} no es un tipo permitido. Solo PDF, JPG, JPEG o PNG`)
+                    continue
+                }
+                
+                if (file.size > 5 * 1024 * 1024) {
+                    toast.error(`El archivo ${file.name} supera los 5MB`)
+                    continue
+                }
+                
+                newFiles.push(file)
             }
-            if (selectedFile.size > 5 * 1024 * 1024) {
-                toast.error("El archivo no debe superar los 5MB")
-                e.target.value = '' // Limpiar el input
-                setFile(null)
-                setFileName("")
-                return
+            
+            if (newFiles.length > 0) {
+                setFiles([...files, ...newFiles])
+                toast.success(`${newFiles.length} archivo(s) agregado(s)`)
             }
-            setFile(selectedFile)
-            setFileName(selectedFile.name)
+            
+            e.target.value = '' // Limpiar el input para permitir seleccionar los mismos archivos nuevamente
         }
     }
 
@@ -947,6 +957,7 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                                         onChange={handleFileChange}
                                         className="hidden"
                                         id="file-upload"
+                                        multiple
                                         disabled={isLoading}
                                     />
                                     <label
@@ -954,24 +965,36 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                                         className="flex items-center gap-2 px-4 py-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md cursor-pointer transition-colors"
                                     >
                                         <Upload className="h-4 w-4" />
-                                        <span>{fileName || "Seleccionar archivo"}</span>
+                                        <span>Agregar archivos</span>
                                     </label>
-                                    {file && (
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => {
-                                                setFile(null)
-                                                setFileName("")
-                                            }}
-                                        >
-                                            Quitar
-                                        </Button>
-                                    )}
                                 </div>
+                                
+                                {/* Lista de archivos seleccionados */}
+                                {files.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium">Archivos seleccionados:</p>
+                                        <div className="space-y-1">
+                                            {files.map((file, index) => (
+                                                <div key={index} className="flex items-center justify-between p-2 border rounded-md">
+                                                    <span className="text-sm truncate flex-1">{file.name}</span>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setFiles(files.filter((_, i) => i !== index))
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                
                                 <p className="text-xs text-muted-foreground">
-                                    Formatos permitidos: PDF, JPG, PNG (máx. 5MB)
+                                    Formatos permitidos: PDF, JPG, PNG (máx. 5MB por archivo)
                                 </p>
                             </div>
 

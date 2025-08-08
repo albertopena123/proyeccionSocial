@@ -112,9 +112,10 @@ interface ConstanciasDataTableProps {
     data: Constancia[]
     permissions: ConstanciaPermissions
     currentUserId: string
+    currentUserRole?: string
 }
 
-export function ConstanciasDataTable({ data: initialData, permissions, currentUserId }: ConstanciasDataTableProps) {
+export function ConstanciasDataTable({ data: initialData, permissions, currentUserId, currentUserRole }: ConstanciasDataTableProps) {
     const [data, setData] = React.useState(initialData)
     
     // Actualizar los datos cuando cambien los datos iniciales
@@ -325,6 +326,8 @@ export function ConstanciasDataTable({ data: initialData, permissions, currentUs
                 const constancia = row.original
                 const isPending = constancia.status === "PENDIENTE"
                 const isApproved = constancia.status === "APROBADO"
+                const isSuperAdmin = currentUserRole === "SUPER_ADMIN"
+                const canEditApproved = isSuperAdmin && isApproved
                 const canDelete = permissions.canDelete && !isApproved // No permitir eliminar si está aprobado
 
                 return (
@@ -345,10 +348,10 @@ export function ConstanciasDataTable({ data: initialData, permissions, currentUs
                                 <>
                                     <DropdownMenuItem 
                                         onClick={() => setEditingConstancia(constancia)}
-                                        disabled={isApproved} // Deshabilitar edición si está aprobado
+                                        disabled={isApproved && !isSuperAdmin} // SUPER_ADMIN puede editar aprobados
                                     >
                                         <IconEdit className="mr-2 h-4 w-4" />
-                                        {isApproved ? "No editable (Aprobado)" : "Editar"}
+                                        {isApproved && !isSuperAdmin ? "No editable (Aprobado)" : canEditApproved ? "Editar (Admin)" : "Editar"}
                                     </DropdownMenuItem>
 
                                     {isPending && (
@@ -624,6 +627,7 @@ export function ConstanciasDataTable({ data: initialData, permissions, currentUs
                     onOpenChange={(open) => {
                         if (!open) setEditingConstancia(null)
                     }}
+                    currentUserRole={currentUserRole}
                 />
             )}
 
