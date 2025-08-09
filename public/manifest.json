@@ -1,0 +1,133 @@
+{
+  "name": "Dirección de Proyección Social y Extensión Universitaria - UNAMAD",
+  "short_name": "DPSEU UNAMAD",
+  "description": "Dirección de Proyección Social y Extensión Universitaria de la Universidad Nacional Amazónica de Madre de Dios",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1e5f3e",
+  "background_color": "#ffffff",
+  "scope": "/",
+  "lang": "es-PE",
+  "dir": "ltr",
+  "categories": ["education", "government", "social"],
+  "icons": [
+    {
+      "src": "/banner/icon.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/banner/icon.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/banner/icon.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/banner/icon.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/banner/icon.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/banner/icon.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/banner/icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/banner/icon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/banner/icon.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/banner/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Proyectos Activos",
+      "short_name": "Proyectos",
+      "description": "Ver proyectos de proyección social activos",
+      "url": "/proyectos",
+      "icons": [
+        {
+          "src": "/banner/icon.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Voluntariado",
+      "short_name": "Voluntariado",
+      "description": "Únete como voluntario",
+      "url": "/voluntariado",
+      "icons": [
+        {
+          "src": "/banner/icon.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Contacto",
+      "short_name": "Contacto",
+      "description": "Contáctanos",
+      "url": "/contacto",
+      "icons": [
+        {
+          "src": "/banner/icon.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "label": "Página principal"
+    },
+    {
+      "src": "/screenshots/proyectos.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "label": "Proyectos sociales"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}
