@@ -76,12 +76,16 @@ export function CreateUserDialog({ children }: CreateUserDialogProps) {
                 body: JSON.stringify(values),
             })
 
+            const data = await response.json()
+
             if (!response.ok) {
-                const error = await response.json()
-                throw new Error(error.error || "Error al crear usuario")
+                throw new Error(data.error || "Error al crear usuario")
             }
 
-            toast.success("Usuario creado correctamente")
+            toast.success("Usuario creado correctamente", {
+                description: data.message || "Se ha enviado un correo de verificación al usuario",
+                duration: 5000,
+            })
             setOpen(false)
             form.reset()
             router.refresh()

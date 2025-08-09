@@ -5,6 +5,8 @@ import { hasPermission } from "@/lib/services/permissions/permissions.service"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 import { UserRole, PermissionAction } from "@prisma/client"
+import crypto from "crypto"
+import { sendVerificationEmail } from "@/lib/email"
 
 const createUserSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -140,14 +142,19 @@ export async function POST(request: NextRequest) {
     // Hash de la contraseña
     const hashedPassword = await bcrypt.hash(validatedData.password, 10)
 
-    // Crear usuario
+    // Generar token de verificación
+    const verificationToken = crypto.randomBytes(32).toString('hex')
+
+    // Crear usuario (inactivo hasta que verifique su email)
     const newUser = await prisma.user.create({
       data: {
         email: validatedData.email.toLowerCase(),
         password: hashedPassword,
         name: validatedData.name,
         role: validatedData.role,
-        emailVerified: new Date(),
+        isActive: false, // Usuario inactivo hasta verificación
+        verificationToken,
+        emailVerified: null, // No verificado aún
         preferences: {
           create: {
             theme: 'system',
@@ -225,6 +232,17 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Enviar email de verificación
+    try {
+      const emailResult = await sendVerificationEmail(newUser.email, newUser.name || 'Usuario', verificationToken)
+      if (!emailResult.success) {
+        console.error("Error enviando email de verificación:", emailResult.error)
+      }
+    } catch (emailError) {
+      console.error("Error enviando email de verificación:", emailError)
+      // No fallar la creación si el email no se envía, pero notificar al usuario
+    }
+
     // Registrar en auditoría
     await prisma.auditLog.create({
       data: {
@@ -242,7 +260,11 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({ success: true, user: newUser }, { status: 201 })
+    return NextResponse.json({ 
+      success: true, 
+      user: newUser,
+      message: "Usuario creado exitosamente. Se ha enviado un correo de verificación a su dirección de email."
+    }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Datos inválidos", details: error.issues }, { status: 400 })
