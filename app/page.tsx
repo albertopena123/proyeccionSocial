@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { Menu, ChevronLeft, ChevronRight, Users, Heart, Award, LogIn, FileSearch, Home, Info, Phone, Calendar, ArrowLeftToLine } from 'lucide-react'
 export default function HomePage() {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
   const [imageErrors, setImageErrors] = useState<{ [key: number]: boolean }>({})
 
