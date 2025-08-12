@@ -149,7 +149,11 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
     }, [initialData])
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
+        modalidad: false,
+        esFinanciado: false,
+        estudiantes: false,
+    })
     const [rowSelection, setRowSelection] = React.useState({})
     const [globalFilter, setGlobalFilter] = React.useState("")
     const [deleteResolucionId, setDeleteResolucionId] = React.useState<string | null>(null)
