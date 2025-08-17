@@ -99,9 +99,18 @@ interface Resolucion {
     }
     estudiantes: Array<{
         id: string
+        dni?: string
         codigo: string
         nombres: string
         apellidos: string
+    }>
+    docentes?: Array<{
+        id?: string
+        dni: string
+        nombres: string
+        apellidos: string
+        email?: string
+        facultad?: string
     }>
     archivos?: Array<{
         id: string
@@ -372,6 +381,17 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
                     return <span className="text-muted-foreground">-</span>
                 }
                 return <span>{estudiantes.length} estudiante(s)</span>
+            },
+        },
+        {
+            accessorKey: "docentes",
+            header: "Docentes",
+            cell: ({ row }) => {
+                const docentes = row.original.docentes
+                if (!docentes || docentes.length === 0) {
+                    return <span className="text-muted-foreground">-</span>
+                }
+                return <span>{docentes.length} docente(s)</span>
             },
         },
         {
@@ -786,9 +806,18 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
                     onOpenChange={(open) => {
                         if (!open) {
                             setEditResolucion(null)
-                            // Recargar la página para obtener datos actualizados
-                            window.location.reload()
                         }
+                    }}
+                    onSuccess={(updatedResolucion) => {
+                        // Actualizar la resolución en el estado local
+                        setData(prevData => 
+                            prevData.map(r => 
+                                r.id === updatedResolucion.id 
+                                    ? { ...updatedResolucion, monto: updatedResolucion.monto?.toString() }
+                                    : r
+                            )
+                        )
+                        setEditResolucion(null)
                     }}
                 />
             )}

@@ -25,7 +25,8 @@
       "Bash(touch:*)",
       "Bash(npm run typecheck:*)",
       "Bash(npm run clean-restart:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npx kill-port:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

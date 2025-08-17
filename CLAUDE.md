@@ -1,268 +1,224 @@
-# Contexto del Proyecto - Sistema de Login
+# CLAUDE.md
 
-## Resumen
-Sistema de autenticación y autorización con Next.js 14, NextAuth v5, Prisma y PostgreSQL.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Sistema de Proyección Social - UNAMAD
+
+Sistema integral para gestión de proyección social universitaria con autenticación, autorización y módulos especializados para resoluciones y documentos académicos.
 
 ## Stack Tecnológico
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 15.4.5 (App Router)
 - **Autenticación**: NextAuth v5 (Credenciales + Google OAuth)
-- **Base de Datos**: PostgreSQL con Prisma ORM
-- **UI**: Shadcn/ui + Tailwind CSS
-- **Lenguaje**: TypeScript
+- **Base de Datos**: PostgreSQL con Prisma ORM v6.13
+- **UI**: Shadcn/ui + Tailwind CSS v4 + Radix UI
+- **Validación**: Zod + React Hook Form
+- **Lenguaje**: TypeScript v5
 
-## Arquitectura de Datos
+## Comandos de Desarrollo
 
-### Usuarios y Roles
-- 4 roles: `SUPER_ADMIN`, `ADMIN`, `MODERATOR`, `USER`
-- Autenticación con email/contraseña (bcrypt) o Google OAuth
-- Sesiones JWT de 30 días
+```bash
+# Desarrollo
+npm run dev                    # Inicia servidor con script personalizado (puerto 3000)
+npm run dev:next              # Inicia Next.js directamente
+npm run stop                  # Detiene todos los procesos
+npm run clean                 # Limpia y reinicia el proyecto
+npm run clean:full           # Limpia completo con reinstalación de dependencias
 
-### Sistema Modular
-- Módulos dinámicos con submódulos
-- Permisos granulares (CREATE, READ, UPDATE, DELETE, EXECUTE)
-- Navegación generada según permisos del usuario
+# Base de Datos
+npx prisma generate          # Genera cliente Prisma
+npx prisma db push          # Sincroniza esquema con DB
+npx prisma db seed          # Poblar base de datos con datos iniciales
+npx prisma studio           # GUI para inspeccionar DB
+npx prisma migrate dev      # Crear/aplicar migraciones
+npx prisma migrate reset    # Reset completo de DB
 
-### Módulos Principales
-1. **Dashboard**: Panel principal con métricas
-2. **Gestión de Usuarios**: Lista de usuarios y roles/permisos
-3. **Gestión de Contenido**: Artículos y categorías
-4. **Configuración**: Apariencia, accesibilidad, notificaciones, cuenta, privacidad
+# Calidad de Código
+npm run lint                # ESLint
+npm run build              # Build de producción
+npm run typecheck          # Verificación de tipos (si está configurado)
 
-## Diseño Responsivo y Accesibilidad
-
-### Principios de Diseño
-- **Mobile-first**: Diseño adaptativo con Tailwind CSS
-- **Componentes Shadcn/ui**: Totalmente responsivos
-- **Padding consistente**: Usar clases `px-4 lg:px-6` para espaciado lateral
-- **Botones apilados en móvil**: Usar `flex flex-col sm:flex-row` para layouts de botones
-- **Textos adaptivos**: Tamaños de fuente responsivos con `text-sm md:text-base`
-
-### Patrones Comunes de UI
-```tsx
-// Contenedor responsivo
-<div className="px-4 lg:px-6 py-4 md:py-6">
-
-// Botones apilados en móvil
-<div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-  <Button>Acción 1</Button>
-  <Button>Acción 2</Button>
-</div>
-
-// Textos adaptivos
-<h1 className="text-2xl md:text-3xl lg:text-4xl">
-<p className="text-sm md:text-base">
+# Migraciones de Datos Personalizadas
+npm run migrate:prepare                    # Preparar migración
+npm run migrate:constancias:dry           # Vista previa de migración de constancias
+npm run migrate:constancias:execute       # Ejecutar migración de constancias
+npm run migrate:constancias:verify        # Verificar migración
+npm run migrate:full                      # Ejecutar flujo completo de migración
 ```
 
-### Sistema de Colores
-- Color primario: Naranja (hue: 25)
-- Colores personalizables por usuario usando OKLCH
-- Temas: light, dark, system
-- Alto contraste y modo de movimiento reducido disponibles
+## Arquitectura de Alto Nivel
 
-## Servicios Clave
+### Sistema de Autenticación
+- **NextAuth v5** con adaptador Prisma
+- Proveedores: Credenciales (bcrypt) y Google OAuth
+- Sesiones JWT con duración de 30 días
+- Callbacks personalizados en `lib/auth.ts` para enriquecer JWT con rol y permisos
 
-### Autenticación (`lib/auth.ts`)
-- NextAuth con adaptador Prisma
-- Callbacks personalizados para JWT y sesión
-- Manejo de errores con toast notifications
+### Sistema de Roles y Permisos
+```
+SUPER_ADMIN > ADMIN > MODERATOR > USER
+```
+- Permisos granulares: CREATE, READ, UPDATE, DELETE, EXECUTE, EXPORT
+- Módulos dinámicos basados en permisos
+- Middleware deshabilitado - protección en layouts
 
-### Servicios de Usuario (`lib/services/`)
-- `getUserModules()`: Obtiene módulos según rol/permisos
-- `getUserPreferences()`: Preferencias visuales del usuario
-- `hasPermission()`: Verifica permisos específicos
+### Arquitectura Modular
+Cada módulo protegido sigue este patrón:
+```
+app/(protected)/[modulo]/
+├── layout.tsx      # Incluye sidebar y header
+├── page.tsx        # Página principal del módulo
+└── [submodulos]/   # Rutas anidadas
+```
 
-## Flujos Principales
+### Módulos Principales
 
-### Login
-1. Usuario ingresa credenciales o usa Google OAuth
-2. Validación con Zod
-3. Verificación bcrypt o OAuth
-4. Redirección a `/dashboard`
+#### 1. Documents (Resoluciones)
+- **Modelo de Datos**: `Resolucion`, `DocenteResolucion`, `EstudianteResolucion`, `ArchivoResolucion`
+- **Estados**: PENDIENTE, APROBADO, RECHAZADO, ANULADO
+- **Tipos**: APROBACION_PROYECTO, APROBACION_INFORME_FINAL
+- **Modalidades**: DOCENTES, ESTUDIANTES, VOLUNTARIADO, ACTIVIDAD
+- **Relaciones**: Facultad, Departamento, Docentes participantes, Estudiantes participantes
+- **APIs externas**: Consulta de estudiantes y docentes UNAMAD
 
-### Dashboard
-1. Verificación de sesión en layout protegido
-2. Carga de módulos según permisos
-3. Aplicación de preferencias de usuario (tema, colores)
-4. Renderizado de sidebar dinámico con iconos Lucide
+#### 2. Dashboard
+- Métricas y estadísticas
+- Gráficos interactivos con Recharts
+- Widgets configurables por rol
 
-## Usuarios de Prueba
-- `superadmin@example.com` / `password123` - SUPER_ADMIN
+#### 3. Gestión de Usuarios
+- CRUD de usuarios
+- Asignación de roles y permisos
+- Importación masiva
+
+#### 4. Configuración
+- Preferencias de usuario (tema, colores OKLCH)
+- Accesibilidad (alto contraste, movimiento reducido)
+- Notificaciones
+
+## Patrones de Código Importantes
+
+### Client Components vs Server Components
+- Server Components por defecto en App Router
+- "use client" solo cuando necesario (interactividad, hooks)
+- Datos sensibles siempre en Server Components
+
+### Manejo de Estado en Formularios
+```typescript
+// Patrón para formularios complejos con participantes
+const [docentes, setDocentes] = useState<Docente[]>([])
+const [showDocentes, setShowDocentes] = useState(false)
+
+// UseEffect para sincronización al editar
+useEffect(() => {
+    if (resolucion?.docentes?.length > 0) {
+        setDocentes(resolucion.docentes)
+        setShowDocentes(true)
+    }
+}, [resolucion])
+```
+
+### APIs Internas
+```typescript
+// GET, POST, PUT, DELETE en route.ts
+export async function POST(request: Request) {
+    const session = await auth()
+    if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    
+    const canCreate = await hasPermission(session.user.id, "module.access", PermissionAction.CREATE)
+    if (!canCreate) return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
+    
+    // Lógica de negocio...
+}
+```
+
+### Consultas Prisma Optimizadas
+```typescript
+// Incluir relaciones necesarias
+const resolucion = await prisma.resolucion.findMany({
+    include: {
+        facultad: true,
+        departamento: true,
+        docentes: true,      // Relación uno a muchos
+        estudiantes: true,   // Relación uno a muchos
+        archivos: true,
+        createdBy: {
+            select: { id: true, name: true, email: true }
+        }
+    },
+    orderBy: { createdAt: 'desc' }
+})
+```
+
+## Servicios Externos
+
+### API UNAMAD
+- `/api/student/consult`: Consulta estudiantes por DNI
+- `/api/teacher/consult`: Consulta docentes por DNI
+- Respuestas con estructura específica de la universidad
+
+### Email (Nodemailer)
+- Configurado para notificaciones
+- Templates en `lib/email/`
+
+## Consideraciones de Desarrollo
+
+### Manejo de Archivos
+- Uploads en `public/uploads/[tipo]/`
+- Límite 5MB por archivo
+- Tipos permitidos: PDF, JPG, PNG
+- MultipartFormData para envío con archivos
+
+### Tipos TypeScript
+- Interfaces completas en cada componente
+- Tipos compartidos en `types/`
+- Validación con Zod schemas
+
+### Optimización de Performance
+- Lazy loading con dynamic imports
+- Debounce en búsquedas (500ms)
+- useMemo para cálculos costosos
+- React.memo para componentes pesados
+
+### Responsividad
+- Mobile-first con Tailwind
+- Breakpoints: sm (640px), md (768px), lg (1024px)
+- Drawer inferior en móvil, lateral en desktop
+- Texto adaptativo con clases responsivas
+
+## Base de Datos
+
+### Conexión
+```
+DATABASE_URL="postgresql://postgres:password@localhost:5432/proyeccionSocial"
+```
+
+### Modelos Principales
+- User (con roles y permisos)
+- Module/SubModule (navegación dinámica)
+- Permission/RolePermission
+- Resolucion (con relaciones a docentes/estudiantes)
+- Facultad/Departamento (catálogos)
+
+### Cascadas y Constraints
+- onDelete: Cascade en relaciones dependientes
+- Unique constraints en campos críticos (numeroResolucion, email)
+- Índices en campos de búsqueda frecuente
+
+## Debugging y Desarrollo
+
+### Usuarios de Prueba
+- `superadmin@unamad.edu.pe` / `password123` - SUPER_ADMIN
 - `admin@example.com` / `password123` - ADMIN
 - `moderator@example.com` / `password123` - MODERATOR
 - `user@example.com` / `password123` - USER
 
-## Comandos Importantes
-```bash
-npm run dev          # Desarrollo
-npm run build        # Build producción
-npm run lint         # Linting
-npx prisma db seed   # Poblar base de datos
-npx prisma studio    # GUI de base de datos
-```
+### Puertos y URLs
+- Desarrollo: http://localhost:3000
+- Prisma Studio: http://localhost:5555
+- PostgreSQL: localhost:5432
 
-## Consideraciones de Desarrollo
-
-### Seguridad
-- No modificar código para usos maliciosos
-- Validación estricta de inputs
-- Protección de rutas sensibles
-- Auditoría de todas las acciones importantes
-
-### Performance
-- Lazy loading de componentes pesados
-- Optimización de consultas Prisma
-- Caché de permisos y módulos cuando sea posible
-
-### Accesibilidad
-- Soporte completo de teclado
-- ARIA labels apropiados
-- Contraste de colores WCAG AA
-- Textos alternativos para imágenes
-
-## Estructura de Carpetas
-```
-/app
-  /(auth)         # Rutas públicas de autenticación
-  /(protected)    # Rutas protegidas
-  /api           # API routes
-/components
-  /auth          # Componentes de autenticación
-  /dashboard     # Componentes del dashboard
-  /ui            # Componentes Shadcn/ui
-/lib
-  /services      # Servicios de negocio
-/prisma
-  schema.prisma  # Modelo de datos
-  seed.ts        # Datos iniciales
-```
-
-## Estructura de Layouts para Módulos
-
-### Layout Principal con Sidebar
-Cada módulo dentro de `(protected)` debe tener su propio `layout.tsx` que incluye el sidebar y header. Ejemplo:
-
-```tsx
-// app/(protected)/[modulo]/layout.tsx
-import { auth } from "@/lib/auth"
-import { redirect } from "next/navigation"
-import { getUserModules, getUserPreferences } from "@/lib/services"
-import { $Enums } from "@prisma/client"
-import { AppSidebar } from "@/components/dashboard/app-sidebar"
-import { SiteHeader } from "@/components/dashboard/site-header"
-import {
-    SidebarInset,
-    SidebarProvider,
-} from "@/components/ui/sidebar"
-
-export default async function ModuleLayout({
-    children,
-}: {
-    children: React.ReactNode
-}) {
-    const session = await auth()
-    
-    if (!session) {
-        redirect("/login")
-    }
-    
-    // Obtener módulos y preferencias
-    const [modules, rawUserPreferences] = await Promise.all([
-        getUserModules(session.user.id, session.user.role as $Enums.UserRole),
-        getUserPreferences(session.user.id)
-    ])
-    
-    // Normalizar datos...
-    
-    return (
-        <SidebarProvider>
-            <AppSidebar
-                variant="inset"
-                session={normalizedSession}
-                modules={modules}
-                userPreferences={userPreferences}
-            />
-            <SidebarInset>
-                <SiteHeader />
-                <div className="flex flex-1 flex-col">
-                    <div className="container mx-auto">
-                        {children}
-                    </div>
-                </div>
-            </SidebarInset>
-        </SidebarProvider>
-    )
-}
-```
-
-### Módulos con Layout
-- `/dashboard` - Usa su propio layout en `page.tsx`
-- `/settings` - Tiene `layout.tsx` con sidebar
-- `/users` - Tiene `layout.tsx` con sidebar
-
-**IMPORTANTE**: Siempre crear un `layout.tsx` para nuevos módulos para mantener la navegación consistente.
-
-### Navegación Activa en Sidebar
-El componente `NavMain` detecta automáticamente la ruta actual usando `usePathname()` y:
-- Marca el módulo/submódulo activo con el estado `isActive`
-- Expande automáticamente el módulo si un submódulo está activo
-- Usa `Link` de Next.js para navegación optimizada
-
-Ejemplo de cómo funciona:
-- Si estás en `/users/users-list`, el módulo "Gestión de Usuarios" estará expandido y "Lista de Usuarios" estará marcado como activo
-- La detección funciona con rutas anidadas: `/users/users-list/edit/123` mantendrá el submódulo activo
-
-## Componentes del Dashboard
-
-### DataTable - Tabla de Datos Avanzada
-El sistema incluye una tabla de datos completa con las siguientes características:
-
-#### Características Principales
-- **Drag & Drop**: Reordenar filas arrastrando con @dnd-kit
-- **Selección múltiple**: Checkbox para seleccionar filas
-- **Paginación**: Control de páginas y filas por página
-- **Ordenamiento**: Ordenar por columnas
-- **Filtros**: Sistema de filtrado por columnas
-- **Edición inline**: Editar valores directamente en las celdas
-- **Drawer/Modal**: Ver y editar detalles en un drawer lateral/inferior
-- **Responsivo**: Se adapta a móvil con drawer inferior
-
-#### Estructura de Datos
-```typescript
-const schema = z.object({
-  id: z.number(),
-  header: z.string(),
-  type: z.string(),
-  status: z.string(),
-  target: z.string(),
-  limit: z.string(),
-  reviewer: z.string(),
-})
-```
-
-#### Uso Típico
-```tsx
-import { DataTable } from "@/components/dashboard/data-table"
-import data from "./data.json"
-
-<DataTable data={data} />
-```
-
-#### Patrones de UI en la Tabla
-- **Padding consistente**: `px-4 lg:px-6` en contenedores
-- **Botones responsivos**: Texto completo en desktop, abreviado en móvil
-- **Drawer adaptativo**: Lateral en desktop, inferior en móvil
-- **Inputs inline**: Campos de edición con estilo transparente
-- **Estados visuales**: Badges para status, iconos para acciones
-
-### ChartAreaInteractive - Gráficos Interactivos
-- Gráficos de área con Recharts
-- Tooltip interactivo
-- Colores basados en variables CSS del tema
-- Configuración mediante `ChartConfig`
-
-## Notas Adicionales
-- El middleware está deshabilitado, la protección se hace en layouts
-- Los colores del sidebar se aplican dinámicamente con CSS variables
-- El sistema es completamente tipado con TypeScript
-- Usar `Task` para búsquedas complejas en el código
-- La tabla del dashboard es un ejemplo completo de componente empresarial
+### Scripts Útiles
+- `scripts/dev-server.js`: Maneja limpieza de puertos y reinicio automático
+- `scripts/clean-restart.js`: Limpieza profunda del proyecto
+- `scripts/migrate-*.js`: Migraciones de datos personalizadas
+- The database schema is defined in the @prisma\schema.prisma  file. Reference it anytime you need to understand the structure of data stored in the database.

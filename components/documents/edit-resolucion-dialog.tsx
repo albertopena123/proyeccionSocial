@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { CalendarIcon, Plus, Search, Trash2, Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -119,6 +118,7 @@ interface Resolucion {
     }
     estudiantes: Array<{
         id: string
+        dni?: string
         codigo: string
         nombres: string
         apellidos: string
@@ -152,32 +152,22 @@ interface EditResolucionDialogProps {
     facultades: { id: string; nombre: string; departamentos?: any[] }[]
     open: boolean
     onOpenChange: (open: boolean) => void
+    onSuccess?: (updatedResolucion: any) => void
 }
 
-export function EditResolucionDialog({ resolucion, facultades, open, onOpenChange }: EditResolucionDialogProps) {
+export function EditResolucionDialog({ resolucion, facultades, open, onOpenChange, onSuccess }: EditResolucionDialogProps) {
     const [isLoading, setIsLoading] = React.useState(false)
     const [newFiles, setNewFiles] = React.useState<File[]>([])
     const [existingFiles, setExistingFiles] = React.useState(resolucion?.archivos || [])
     const [filesToDelete, setFilesToDelete] = React.useState<string[]>([])
-    const [estudiantes, setEstudiantes] = React.useState<Estudiante[]>(
-        (resolucion?.estudiantes || []).map(est => ({
-            ...est,
-            id: est.id || `estudiante_${Date.now()}_${Math.random()}`
-        }))
-    )
-    const [docentes, setDocentes] = React.useState<Docente[]>(
-        (resolucion?.docentes || []).map(doc => ({
-            ...doc,
-            id: doc.id || `docente_${Date.now()}_${Math.random()}`
-        }))
-    )
+    const [estudiantes, setEstudiantes] = React.useState<Estudiante[]>([])
+    const [docentes, setDocentes] = React.useState<Docente[]>([])
     const [selectedFacultad, setSelectedFacultad] = React.useState<string>(resolucion?.facultad?.id?.toString() || resolucion?.facultadId?.toString() || "")
     const [searchingAsesor, setSearchingAsesor] = React.useState(false)
-    const [showDocentes, setShowDocentes] = React.useState((resolucion?.docentes ?? []).length > 0)
-    const [showEstudiantes, setShowEstudiantes] = React.useState((resolucion?.estudiantes ?? []).length > 0)
+    const [showDocentes, setShowDocentes] = React.useState(false)
+    const [showEstudiantes, setShowEstudiantes] = React.useState(false)
     const searchTimeouts = React.useRef<{ [key: string]: NodeJS.Timeout }>({})
     const lastSearched = React.useRef<{ [key: string]: string }>({})
-    const router = useRouter()
 
     const form = useForm<ResolucionFormValues>({
         resolver: zodResolver(resolucionSchema),
@@ -199,34 +189,53 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
     // Inicializar selectedFacultad cuando el componente se monta o cuando cambia la resolución
     React.useEffect(() => {
         const facultadId = resolucion?.facultad?.id?.toString() || resolucion?.facultadId?.toString() || ""
-        console.log('=== INIT useEffect ===')
-        console.log('Resolucion completa:', resolucion)
-        console.log('FacultadId de resolucion:', facultadId)
-        console.log('DepartamentoId de resolucion:', resolucion?.departamento?.id, resolucion?.departamentoId)
-        console.log('selectedFacultad actual:', selectedFacultad)
         if (facultadId && facultadId !== selectedFacultad) {
             setSelectedFacultad(facultadId)
         }
     }, [resolucion])
 
-    const departamentosDisponibles = React.useMemo(() => {
-        console.log('=== CALCULANDO DEPARTAMENTOS ===')
-        console.log('selectedFacultad:', selectedFacultad)
-        console.log('facultades recibidas:', facultades)
+    // Actualizar docentes y estudiantes cuando cambie la resolución
+    React.useEffect(() => {
+        if (resolucion) {
+            // Actualizar docentes
+            if (resolucion.docentes && resolucion.docentes.length > 0) {
+                setDocentes(resolucion.docentes.map(doc => ({
+                    ...doc,
+                    dni: doc.dni || ''
+                })))
+                setShowDocentes(true)
+            } else {
+                setDocentes([])
+                setShowDocentes(false)
+            }
+            
+            // Actualizar estudiantes
+            if (resolucion.estudiantes && resolucion.estudiantes.length > 0) {
+                setEstudiantes(resolucion.estudiantes.map(est => ({
+                    ...est,
+                    dni: est.dni || ''
+                })))
+                setShowEstudiantes(true)
+            } else {
+                setEstudiantes([])
+                setShowEstudiantes(false)
+            }
+            
+            // Actualizar archivos existentes
+            if (resolucion.archivos) {
+                setExistingFiles(resolucion.archivos)
+            }
+        }
+    }, [resolucion])
 
+    const departamentosDisponibles = React.useMemo(() => {
         if (!selectedFacultad) {
-            console.log('No hay facultad seleccionada')
             return []
         }
 
         const facultad = facultades.find(f => {
-            console.log(`Comparando: ${f.id} (tipo: ${typeof f.id}) === ${selectedFacultad} (tipo: ${typeof selectedFacultad})`)
             return f.id.toString() === selectedFacultad
         })
-
-        console.log('Facultad encontrada:', facultad)
-        console.log('Departamentos de la facultad:', facultad?.departamentos)
-        console.log('DepartamentoId en el form:', form.getValues('departamentoId'))
 
         return facultad?.departamentos || []
     }, [selectedFacultad, facultades])
@@ -481,9 +490,16 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                 throw new Error(error.error || "Error al actualizar la resolución")
             }
 
+            const updatedResolucion = await response.json()
+            
             toast.success("Resolución actualizada exitosamente")
+            
+            // Llamar al callback si existe para actualizar la tabla
+            if (onSuccess) {
+                onSuccess(updatedResolucion)
+            }
+            
             onOpenChange(false)
-            router.refresh()
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Error al actualizar la resolución")
         } finally {

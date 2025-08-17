@@ -451,6 +451,22 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
         }
     }
 
+    // Resetear estado cuando se cierra el diálogo
+    React.useEffect(() => {
+        if (!open) {
+            // Resetear todo el estado cuando se cierra el diálogo
+            form.reset()
+            setFiles([])
+            setEstudiantes([])
+            setDocentes([])
+            setShowDocentes(false)
+            setShowEstudiantes(false)
+            setSelectedFacultad("")
+            // Limpiar referencias
+            lastSearched.current = {}
+        }
+    }, [open, form])
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -812,7 +828,13 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                                         <Checkbox
                                             id="show-docentes"
                                             checked={showDocentes}
-                                            onCheckedChange={(checked) => setShowDocentes(checked as boolean)}
+                                            onCheckedChange={(checked) => {
+                                                setShowDocentes(checked as boolean)
+                                                // Si se activa y no hay docentes, agregar uno vacío automáticamente
+                                                if (checked && docentes.length === 0) {
+                                                    agregarDocente()
+                                                }
+                                            }}
                                         />
                                         <label
                                             htmlFor="show-docentes"
@@ -826,7 +848,13 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                                         <Checkbox
                                             id="show-estudiantes"
                                             checked={showEstudiantes}
-                                            onCheckedChange={(checked) => setShowEstudiantes(checked as boolean)}
+                                            onCheckedChange={(checked) => {
+                                                setShowEstudiantes(checked as boolean)
+                                                // Si se activa y no hay estudiantes, agregar uno vacío automáticamente
+                                                if (checked && estudiantes.length === 0) {
+                                                    agregarEstudiante()
+                                                }
+                                            }}
                                         />
                                         <label
                                             htmlFor="show-estudiantes"

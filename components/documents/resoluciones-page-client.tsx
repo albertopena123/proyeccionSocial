@@ -63,12 +63,9 @@ export function ResolucionesPageClient({
         // Actualización inmediata con los datos completos
         if (resolucionSerializable) {
             setResoluciones(prev => [resolucionSerializable, ...prev])
+            setRefreshKey(prev => prev + 1) // Forzar actualización de la tabla
         }
-        // También actualizar desde el servidor para sincronizar
-        setTimeout(() => {
-            refreshResoluciones()
-        }, 500)
-    }, [refreshResoluciones])
+    }, [])
 
     return (
         <div className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
