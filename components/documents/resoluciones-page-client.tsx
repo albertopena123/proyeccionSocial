@@ -111,7 +111,7 @@ export function ResolucionesPageClient({
                     permissions={permissions}
                     currentUserId={currentUserId}
                     currentUserRole={currentUserRole}
-                    facultades={facultadesParaTabla}
+                    facultades={facultades}
                 />
             </div>
         </div>

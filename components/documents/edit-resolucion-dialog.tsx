@@ -75,6 +75,7 @@ interface Estudiante {
 }
 
 interface Docente {
+    id?: string
     dni: string
     nombres: string
     apellidos: string
@@ -158,12 +159,24 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
     const [newFiles, setNewFiles] = React.useState<File[]>([])
     const [existingFiles, setExistingFiles] = React.useState(resolucion?.archivos || [])
     const [filesToDelete, setFilesToDelete] = React.useState<string[]>([])
-    const [estudiantes, setEstudiantes] = React.useState<Estudiante[]>(resolucion?.estudiantes || [])
-    const [docentes, setDocentes] = React.useState<Docente[]>(resolucion?.docentes || [])
+    const [estudiantes, setEstudiantes] = React.useState<Estudiante[]>(
+        (resolucion?.estudiantes || []).map(est => ({
+            ...est,
+            id: est.id || `estudiante_${Date.now()}_${Math.random()}`
+        }))
+    )
+    const [docentes, setDocentes] = React.useState<Docente[]>(
+        (resolucion?.docentes || []).map(doc => ({
+            ...doc,
+            id: doc.id || `docente_${Date.now()}_${Math.random()}`
+        }))
+    )
     const [selectedFacultad, setSelectedFacultad] = React.useState<string>(resolucion?.facultad?.id?.toString() || resolucion?.facultadId?.toString() || "")
     const [searchingAsesor, setSearchingAsesor] = React.useState(false)
     const [showDocentes, setShowDocentes] = React.useState((resolucion?.docentes ?? []).length > 0)
     const [showEstudiantes, setShowEstudiantes] = React.useState((resolucion?.estudiantes ?? []).length > 0)
+    const searchTimeouts = React.useRef<{ [key: string]: NodeJS.Timeout }>({})
+    const lastSearched = React.useRef<{ [key: string]: string }>({})
     const router = useRouter()
 
     const form = useForm<ResolucionFormValues>({
@@ -183,20 +196,54 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
         },
     })
 
+    // Inicializar selectedFacultad cuando el componente se monta o cuando cambia la resolución
+    React.useEffect(() => {
+        const facultadId = resolucion?.facultad?.id?.toString() || resolucion?.facultadId?.toString() || ""
+        console.log('=== INIT useEffect ===')
+        console.log('Resolucion completa:', resolucion)
+        console.log('FacultadId de resolucion:', facultadId)
+        console.log('DepartamentoId de resolucion:', resolucion?.departamento?.id, resolucion?.departamentoId)
+        console.log('selectedFacultad actual:', selectedFacultad)
+        if (facultadId && facultadId !== selectedFacultad) {
+            setSelectedFacultad(facultadId)
+        }
+    }, [resolucion])
+
     const departamentosDisponibles = React.useMemo(() => {
-        if (!selectedFacultad) return []
-        const facultad = facultades.find(f => f.id === selectedFacultad)
+        console.log('=== CALCULANDO DEPARTAMENTOS ===')
+        console.log('selectedFacultad:', selectedFacultad)
+        console.log('facultades recibidas:', facultades)
+
+        if (!selectedFacultad) {
+            console.log('No hay facultad seleccionada')
+            return []
+        }
+
+        const facultad = facultades.find(f => {
+            console.log(`Comparando: ${f.id} (tipo: ${typeof f.id}) === ${selectedFacultad} (tipo: ${typeof selectedFacultad})`)
+            return f.id.toString() === selectedFacultad
+        })
+
+        console.log('Facultad encontrada:', facultad)
+        console.log('Departamentos de la facultad:', facultad?.departamentos)
+        console.log('DepartamentoId en el form:', form.getValues('departamentoId'))
+
         return facultad?.departamentos || []
     }, [selectedFacultad, facultades])
 
     // Buscar asesor por DNI en la API
-    const buscarAsesor = async () => {
-        const dni = form.getValues("dniAsesor")
-        if (!dni) {
-            toast.error("Ingrese un número de documento válido")
+    const buscarAsesor = async (dniParam?: string) => {
+        const dni = dniParam || form.getValues("dniAsesor")
+        if (!dni || dni.length < 8) {
             return
         }
 
+        // Evitar búsquedas duplicadas del mismo DNI
+        if (lastSearched.current['asesor'] === dni) {
+            return
+        }
+
+        lastSearched.current['asesor'] = dni
         setSearchingAsesor(true)
         try {
             const response = await fetch("/api/teacher/consult", {
@@ -224,6 +271,7 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
     // Funciones para manejar docentes y estudiantes (similar al create)
     const agregarDocente = () => {
         const nuevoDocente: Docente = {
+            id: `docente_${Date.now()}_${Math.random()}`,
             dni: "",
             nombres: "",
             apellidos: "",
@@ -237,12 +285,20 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
         setDocentes(docentes.filter((_, i) => i !== index))
     }
 
-    const buscarDocente = async (index: number) => {
-        const dni = docentes[index].dni
-        if (!dni) {
-            toast.error("Ingrese un número de documento válido")
+    const buscarDocente = async (index: number, dniParam?: string) => {
+        const dni = dniParam || docentes[index]?.dni
+        if (!dni || dni.length < 8) {
             return
         }
+
+        const docenteId = docentes[index]?.id || `docente_${index}`
+
+        // Evitar búsquedas duplicadas del mismo DNI para el mismo docente
+        if (lastSearched.current[docenteId] === dni) {
+            return
+        }
+
+        lastSearched.current[docenteId] = dni
 
         try {
             const response = await fetch("/api/teacher/consult", {
@@ -258,6 +314,7 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                 const nuevosDocentes = [...docentes]
                 nuevosDocentes[index] = {
                     ...nuevosDocentes[index],
+                    dni: dni, // Mantener el DNI que se buscó
                     nombres: data.nombres,
                     apellidos: data.apellidos,
                     email: data.email || "",
@@ -284,6 +341,7 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
 
     const agregarEstudiante = () => {
         const nuevoEstudiante: Estudiante = {
+            id: `estudiante_${Date.now()}_${Math.random()}`,
             dni: "",
             codigo: "",
             nombres: "",
@@ -296,12 +354,20 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
         setEstudiantes(estudiantes.filter((_, i) => i !== index))
     }
 
-    const buscarEstudiante = async (index: number) => {
-        const dni = estudiantes[index].dni
-        if (!dni) {
-            toast.error("Ingrese un número de documento válido")
+    const buscarEstudiante = async (index: number, dniParam?: string) => {
+        const dni = dniParam || estudiantes[index]?.dni
+        if (!dni || dni.length < 8) {
             return
         }
+
+        const estudianteId = estudiantes[index]?.id || `estudiante_${index}`
+
+        // Evitar búsquedas duplicadas del mismo DNI para el mismo estudiante
+        if (lastSearched.current[estudianteId] === dni) {
+            return
+        }
+
+        lastSearched.current[estudianteId] = dni
 
         try {
             const response = await fetch("/api/student/consult", {
@@ -317,6 +383,7 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                 const nuevosEstudiantes = [...estudiantes]
                 nuevosEstudiantes[index] = {
                     ...nuevosEstudiantes[index],
+                    dni: dni, // Mantener el DNI que se buscó
                     codigo: data.codigo,
                     nombres: data.nombres,
                     apellidos: data.apellidos
@@ -398,7 +465,7 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                     formData.append('files', file)
                 })
             }
-            
+
             // Agregar archivos a eliminar
             if (filesToDelete.length > 0) {
                 formData.append('filesToDelete', JSON.stringify(filesToDelete))
@@ -429,37 +496,37 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
         if (selectedFiles) {
             const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
             const validFiles: File[] = []
-            
+
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i]
-                
+
                 if (!allowedTypes.includes(file.type)) {
                     toast.error(`El archivo ${file.name} no es un tipo permitido. Solo PDF, JPG, JPEG o PNG`)
                     continue
                 }
-                
+
                 if (file.size > 5 * 1024 * 1024) {
                     toast.error(`El archivo ${file.name} supera los 5MB`)
                     continue
                 }
-                
+
                 validFiles.push(file)
             }
-            
+
             if (validFiles.length > 0) {
                 setNewFiles([...newFiles, ...validFiles])
                 toast.success(`${validFiles.length} archivo(s) agregado(s)`)
             }
-            
+
             e.target.value = '' // Limpiar el input
         }
     }
-    
+
     const removeExistingFile = (fileId: string) => {
         setFilesToDelete([...filesToDelete, fileId])
         setExistingFiles(existingFiles.filter(f => f.id !== fileId))
     }
-    
+
     const removeNewFile = (index: number) => {
         setNewFiles(newFiles.filter((_, i) => i !== index))
     }
@@ -684,11 +751,15 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                                 <FormLabel>Facultad</FormLabel>
                                                 <Select
                                                     onValueChange={(value) => {
+                                                        const previousValue = field.value
                                                         field.onChange(value)
                                                         setSelectedFacultad(value)
-                                                        form.setValue("departamentoId", "")
+                                                        // Solo limpiar departamento si el usuario cambió manualmente la facultad
+                                                        if (previousValue && value !== previousValue) {
+                                                            form.setValue("departamentoId", "")
+                                                        }
                                                     }}
-                                                    defaultValue={field.value}
+                                                    value={field.value}
                                                 >
                                                     <FormControl>
                                                         <SelectTrigger>
@@ -719,7 +790,7 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                                 <FormLabel>Departamento</FormLabel>
                                                 <Select
                                                     onValueChange={field.onChange}
-                                                    defaultValue={field.value}
+                                                    value={field.value}
                                                     disabled={!selectedFacultad}
                                                 >
                                                     <FormControl>
@@ -728,14 +799,23 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                                         </SelectTrigger>
                                                     </FormControl>
                                                     <SelectContent>
-                                                        {departamentosDisponibles.map((depto) => (
-                                                            <SelectItem
-                                                                key={depto.id}
-                                                                value={depto.id.toString()}
-                                                            >
-                                                                {depto.nombre}
+
+                                                        {departamentosDisponibles.length === 0 && (
+                                                            <SelectItem value="no-deps" disabled>
+                                                                No hay departamentos disponibles
                                                             </SelectItem>
-                                                        ))}
+                                                        )}
+                                                        {departamentosDisponibles.map((depto) => {
+                                                            console.log(`Departamento opción: ${depto.id} - ${depto.nombre}`)
+                                                            return (
+                                                                <SelectItem
+                                                                    key={depto.id}
+                                                                    value={depto.id.toString()}
+                                                                >
+                                                                    {depto.nombre}
+                                                                </SelectItem>
+                                                            )
+                                                        })}
                                                     </SelectContent>
                                                 </Select>
                                                 <FormMessage />
@@ -761,15 +841,34 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                                 <div className="flex gap-2">
                                                     <FormControl>
                                                         <Input
-                                                            {...field}
                                                             placeholder="Número de documento"
+                                                            value={field.value}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value
+                                                                field.onChange(value)
+
+                                                                // Limpiar timeout anterior
+                                                                if (searchTimeouts.current['asesor']) {
+                                                                    clearTimeout(searchTimeouts.current['asesor'])
+                                                                }
+
+                                                                // Buscar con debounce cuando tenga 8 dígitos o más
+                                                                if (value.length >= 8) {
+                                                                    searchTimeouts.current['asesor'] = setTimeout(() => {
+                                                                        buscarAsesor(value)
+                                                                    }, 500)
+                                                                }
+                                                            }}
+                                                            onBlur={field.onBlur}
+                                                            name={field.name}
+                                                            ref={field.ref}
                                                         />
                                                     </FormControl>
                                                     <Button
                                                         type="button"
                                                         variant="outline"
                                                         size="icon"
-                                                        onClick={buscarAsesor}
+                                                        onClick={() => buscarAsesor()}
                                                         disabled={searchingAsesor}
                                                     >
                                                         <Search className="h-4 w-4" />
@@ -863,7 +962,25 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                                                     <Input
                                                                         placeholder="N° Documento"
                                                                         value={docente.dni}
-                                                                        onChange={(e) => actualizarDocente(index, 'dni', e.target.value.replace(/\D/g, ''))}
+                                                                        onChange={(e) => {
+                                                                            const dni = e.target.value.replace(/\D/g, '')
+                                                                            actualizarDocente(index, 'dni', dni)
+
+                                                                            const docenteId = docente.id || `docente_${index}`
+                                                                            const timeoutKey = `timeout_${docenteId}`
+
+                                                                            // Limpiar timeout anterior
+                                                                            if (searchTimeouts.current[timeoutKey]) {
+                                                                                clearTimeout(searchTimeouts.current[timeoutKey])
+                                                                            }
+
+                                                                            // Buscar con debounce cuando tenga 8 dígitos o más
+                                                                            if (dni.length >= 8) {
+                                                                                searchTimeouts.current[timeoutKey] = setTimeout(() => {
+                                                                                    buscarDocente(index, dni)
+                                                                                }, 500)
+                                                                            }
+                                                                        }}
                                                                     />
                                                                     <Button
                                                                         type="button"
@@ -944,7 +1061,25 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                                                     <Input
                                                                         placeholder="N° Documento"
                                                                         value={estudiante.dni}
-                                                                        onChange={(e) => actualizarEstudiante(index, 'dni', e.target.value.replace(/\D/g, ''))}
+                                                                        onChange={(e) => {
+                                                                            const dni = e.target.value.replace(/\D/g, '')
+                                                                            actualizarEstudiante(index, 'dni', dni)
+
+                                                                            const estudianteId = estudiante.id || `estudiante_${index}`
+                                                                            const timeoutKey = `timeout_${estudianteId}`
+
+                                                                            // Limpiar timeout anterior
+                                                                            if (searchTimeouts.current[timeoutKey]) {
+                                                                                clearTimeout(searchTimeouts.current[timeoutKey])
+                                                                            }
+
+                                                                            // Buscar con debounce cuando tenga 8 dígitos o más
+                                                                            if (dni.length >= 8) {
+                                                                                searchTimeouts.current[timeoutKey] = setTimeout(() => {
+                                                                                    buscarEstudiante(index, dni)
+                                                                                }, 500)
+                                                                            }
+                                                                        }}
                                                                     />
                                                                     <Button
                                                                         type="button"
@@ -1016,7 +1151,7 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                         <span>Agregar archivos</span>
                                     </label>
                                 </div>
-                                
+
                                 {/* Archivos existentes */}
                                 {existingFiles.length > 0 && (
                                     <div className="space-y-2">
@@ -1050,7 +1185,7 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 {/* Nuevos archivos */}
                                 {newFiles.length > 0 && (
                                     <div className="space-y-2">
@@ -1072,7 +1207,7 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 <p className="text-xs text-muted-foreground">
                                     Formatos permitidos: PDF, JPG, PNG (máx. 5MB por archivo)
                                 </p>

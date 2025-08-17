@@ -147,12 +147,18 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
     React.useEffect(() => {
         setData(initialData)
     }, [initialData])
-    const [sorting, setSorting] = React.useState<SortingState>([])
+    const [sorting, setSorting] = React.useState<SortingState>([
+        {
+            id: "createdAt",
+            desc: true
+        }
+    ])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
         modalidad: false,
         esFinanciado: false,
         estudiantes: false,
+        createdAt: false,
     })
     const [rowSelection, setRowSelection] = React.useState({})
     const [globalFilter, setGlobalFilter] = React.useState("")
@@ -387,6 +393,14 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
                     </Badge>
                 )
             },
+        },
+        {
+            accessorKey: "createdAt",
+            header: "Fecha Creación",
+            cell: ({ row }) => {
+                return formatDateShort(row.original.createdAt)
+            },
+            enableSorting: true,
         },
         {
             accessorKey: "archivos",

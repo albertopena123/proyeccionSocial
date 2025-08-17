@@ -207,6 +207,18 @@ export async function POST(request: Request) {
             }
         }
 
+        // Verificar si ya existe una resolución con ese número
+        const resolucionExistente = await prisma.resolucion.findUnique({
+            where: { numeroResolucion }
+        })
+
+        if (resolucionExistente) {
+            return NextResponse.json(
+                { error: `Ya existe una resolución con el número "${numeroResolucion}". Por favor, use un número de resolución diferente.` },
+                { status: 400 }
+            )
+        }
+
         // Crear la resolución con todas las relaciones
         const resolucion = await prisma.resolucion.create({
             data: {
@@ -265,8 +277,19 @@ export async function POST(request: Request) {
         })
 
         return NextResponse.json(resolucion, { status: 201 })
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error al crear resolución:", error)
+        
+        // Manejar error de duplicados
+        if (error.code === 'P2002') {
+            if (error.meta?.target?.includes('dni')) {
+                return NextResponse.json(
+                    { error: "No se puede agregar el mismo estudiante o docente dos veces en la misma resolución" },
+                    { status: 400 }
+                )
+            }
+        }
+        
         return NextResponse.json(
             { error: "Error al crear la resolución" },
             { status: 500 }

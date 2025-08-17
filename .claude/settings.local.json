@@ -27,6 +27,7 @@
       "Bash(npm run clean-restart:*)",
       "Bash(node:*)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   }
 }

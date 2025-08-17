@@ -64,6 +64,7 @@ const resolucionSchema = z.object({
 type ResolucionFormValues = z.infer<typeof resolucionSchema>
 
 interface Estudiante {
+    id?: string
     dni: string
     codigo: string
     nombres: string
@@ -71,6 +72,7 @@ interface Estudiante {
 }
 
 interface Docente {
+    id?: string
     dni: string
     nombres: string
     apellidos: string
@@ -105,6 +107,8 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
     const [searchingAsesor, setSearchingAsesor] = React.useState(false)
     const [showDocentes, setShowDocentes] = React.useState(false)
     const [showEstudiantes, setShowEstudiantes] = React.useState(false)
+    const searchTimeouts = React.useRef<{ [key: string]: NodeJS.Timeout }>({})
+    const lastSearched = React.useRef<{ [key: string]: string }>({})
 
     const form = useForm<ResolucionFormValues>({
 
@@ -130,13 +134,18 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
     }, [selectedFacultad, facultades])
 
     // Buscar asesor por DNI en la API
-    const buscarAsesor = async () => {
-        const dni = form.getValues("dniAsesor")
-        if (!dni) {
-            toast.error("Ingrese un número de documento válido")
+    const buscarAsesor = async (dniParam?: string) => {
+        const dni = dniParam || form.getValues("dniAsesor")
+        if (!dni || dni.length < 8) {
             return
         }
 
+        // Evitar búsquedas duplicadas del mismo DNI
+        if (lastSearched.current['asesor'] === dni) {
+            return
+        }
+        
+        lastSearched.current['asesor'] = dni
         setSearchingAsesor(true)
         try {
             const response = await fetch("/api/teacher/consult", {
@@ -164,6 +173,7 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
     // Agregar docente a la lista
     const agregarDocente = () => {
         const nuevoDocente: Docente = {
+            id: `docente_${Date.now()}_${Math.random()}`,
             dni: "",
             nombres: "",
             apellidos: "",
@@ -189,13 +199,22 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
     }
 
     // Buscar docente por DNI
-    const buscarDocente = async (index: number) => {
-        const dni = docentes[index].dni
-        if (!dni) {
-            toast.error("Ingrese un número de documento válido")
+    const buscarDocente = async (index: number, dniParam?: string) => {
+        const dni = dniParam || docentes[index]?.dni
+        if (!dni || dni.length < 8) {
             return
         }
 
+        const docenteId = docentes[index]?.id || `docente_${index}`
+        const searchKey = `search_${docenteId}_${dni}`
+        
+        // Evitar búsquedas duplicadas del mismo DNI para el mismo docente
+        if (lastSearched.current[docenteId] === dni) {
+            return
+        }
+        
+        lastSearched.current[docenteId] = dni
+        
         try {
             const response = await fetch("/api/teacher/consult", {
                 method: "POST",
@@ -208,10 +227,11 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
             if (response.ok) {
                 const data = await response.json()
 
-                // Actualizar todos los campos del docente de una vez
+                // Actualizar todos los campos del docente de una vez, incluyendo el DNI
                 const nuevosDocentes = [...docentes]
                 nuevosDocentes[index] = {
                     ...nuevosDocentes[index],
+                    dni: dni, // Mantener el DNI que se buscó
                     nombres: data.nombres,
                     apellidos: data.apellidos,
                     email: data.email || "",
@@ -230,6 +250,7 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
     // Agregar estudiante a la lista
     const agregarEstudiante = () => {
         const nuevoEstudiante: Estudiante = {
+            id: `estudiante_${Date.now()}_${Math.random()}`,
             dni: "",
             codigo: "",
             nombres: "",
@@ -256,14 +277,22 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
     }
 
     // Buscar estudiante por DNI
-    const buscarEstudiante = async (index: number) => {
-        const dni = estudiantes[index].dni
-        if (!dni) {
-            toast.error("Ingrese un número de documento válido")
+    const buscarEstudiante = async (index: number, dniParam?: string) => {
+        const dni = dniParam || estudiantes[index]?.dni
+        if (!dni || dni.length < 8) {
             return
         }
 
-        console.log("Estado del estudiante antes de buscar:", estudiantes[index])
+        const estudianteId = estudiantes[index]?.id || `estudiante_${index}`
+        const searchKey = `search_${estudianteId}_${dni}`
+        
+        // Evitar búsquedas duplicadas del mismo DNI para el mismo estudiante
+        if (lastSearched.current[estudianteId] === dni) {
+            return
+        }
+        
+        lastSearched.current[estudianteId] = dni
+        
         try {
             const response = await fetch("/api/student/consult", {
                 method: "POST",
@@ -277,16 +306,16 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                 const data = await response.json()
                 console.log("Datos recibidos del API:", data)
 
-                // Actualizar todos los campos del estudiante de una vez
+                // Actualizar todos los campos del estudiante de una vez, incluyendo el DNI
                 const nuevosEstudiantes = [...estudiantes]
                 nuevosEstudiantes[index] = {
                     ...nuevosEstudiantes[index],
+                    dni: dni, // Mantener el DNI que se buscó
                     codigo: data.codigo,
                     nombres: data.nombres,
                     apellidos: data.apellidos
                 }
                 setEstudiantes(nuevosEstudiantes)
-                console.log("Estudiante actualizado:", nuevosEstudiantes[index])
                 toast.success("Estudiante encontrado")
             } else {
                 toast.error("No se encontró el estudiante")
@@ -718,15 +747,34 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                                                 <div className="flex gap-2">
                                                     <FormControl>
                                                         <Input
-                                                            {...field}
                                                             placeholder="Número de documento"
+                                                            value={field.value}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value
+                                                                field.onChange(value)
+                                                                
+                                                                // Limpiar timeout anterior
+                                                                if (searchTimeouts.current['asesor']) {
+                                                                    clearTimeout(searchTimeouts.current['asesor'])
+                                                                }
+                                                                
+                                                                // Buscar con debounce cuando tenga 8 dígitos o más
+                                                                if (value.length >= 8) {
+                                                                    searchTimeouts.current['asesor'] = setTimeout(() => {
+                                                                        buscarAsesor(value)
+                                                                    }, 500)
+                                                                }
+                                                            }}
+                                                            onBlur={field.onBlur}
+                                                            name={field.name}
+                                                            ref={field.ref}
                                                         />
                                                     </FormControl>
                                                     <Button
                                                         type="button"
                                                         variant="outline"
                                                         size="icon"
-                                                        onClick={buscarAsesor}
+                                                        onClick={() => buscarAsesor()}
                                                         disabled={searchingAsesor}
                                                     >
                                                         <Search className="h-4 w-4" />
@@ -820,7 +868,25 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                                                                     <Input
                                                                         placeholder="N° Documento"
                                                                         value={docente.dni}
-                                                                        onChange={(e) => actualizarDocente(index, 'dni', e.target.value.replace(/\D/g, ''))}
+                                                                        onChange={(e) => {
+                                                                            const dni = e.target.value.replace(/\D/g, '')
+                                                                            actualizarDocente(index, 'dni', dni)
+                                                                            
+                                                                            const docenteId = docente.id || `docente_${index}`
+                                                                            const timeoutKey = `timeout_${docenteId}`
+                                                                            
+                                                                            // Limpiar timeout anterior
+                                                                            if (searchTimeouts.current[timeoutKey]) {
+                                                                                clearTimeout(searchTimeouts.current[timeoutKey])
+                                                                            }
+                                                                            
+                                                                            // Buscar con debounce cuando tenga 8 dígitos o más
+                                                                            if (dni.length >= 8) {
+                                                                                searchTimeouts.current[timeoutKey] = setTimeout(() => {
+                                                                                    buscarDocente(index, dni)
+                                                                                }, 500)
+                                                                            }
+                                                                        }}
                                                                     />
                                                                     <Button
                                                                         type="button"
@@ -901,7 +967,25 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                                                                     <Input
                                                                         placeholder="N° Documento"
                                                                         value={estudiante.dni}
-                                                                        onChange={(e) => actualizarEstudiante(index, 'dni', e.target.value.replace(/\D/g, ''))}
+                                                                        onChange={(e) => {
+                                                                            const dni = e.target.value.replace(/\D/g, '')
+                                                                            actualizarEstudiante(index, 'dni', dni)
+                                                                            
+                                                                            const estudianteId = estudiante.id || `estudiante_${index}`
+                                                                            const timeoutKey = `timeout_${estudianteId}`
+                                                                            
+                                                                            // Limpiar timeout anterior
+                                                                            if (searchTimeouts.current[timeoutKey]) {
+                                                                                clearTimeout(searchTimeouts.current[timeoutKey])
+                                                                            }
+                                                                            
+                                                                            // Buscar con debounce cuando tenga 8 dígitos o más
+                                                                            if (dni.length >= 8) {
+                                                                                searchTimeouts.current[timeoutKey] = setTimeout(() => {
+                                                                                    buscarEstudiante(index, dni)
+                                                                                }, 500)
+                                                                            }
+                                                                        }}
                                                                     />
                                                                     <Button
                                                                         type="button"
