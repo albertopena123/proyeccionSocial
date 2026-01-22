@@ -348,6 +348,8 @@ enum DocumentType {
 enum TipoResolucion {
   APROBACION_PROYECTO
   APROBACION_INFORME_FINAL
+  APROBACION_VIABILIDAD
+  RECONOCIMIENTO
 }
 
 enum ModalidadResolucion {

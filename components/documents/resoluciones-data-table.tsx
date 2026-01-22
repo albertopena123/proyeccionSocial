@@ -178,7 +178,9 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
     const getTipoResolucionLabel = (tipo: string) => {
         const labels: Record<string, string> = {
             APROBACION_PROYECTO: "Aprobación de Proyecto",
-            APROBACION_INFORME_FINAL: "Aprobación de Informe Final"
+            APROBACION_INFORME_FINAL: "Aprobación de Informe Final",
+            APROBACION_VIABILIDAD: "Aprobación de Viabilidad",
+            RECONOCIMIENTO: "Reconocimiento"
         }
         return labels[tipo] || tipo
     }

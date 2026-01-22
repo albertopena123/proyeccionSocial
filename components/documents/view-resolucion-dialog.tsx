@@ -76,7 +76,9 @@ export function ViewResolucionDialog({ resolucion, open, onOpenChange }: ViewRes
     const getTipoResolucionLabel = (tipo: string) => {
         const tipos: Record<string, string> = {
             APROBACION_PROYECTO: "Aprobación de Proyecto",
-            APROBACION_INFORME_FINAL: "Aprobación de Informe Final"
+            APROBACION_INFORME_FINAL: "Aprobación de Informe Final",
+            APROBACION_VIABILIDAD: "Aprobación de Viabilidad",
+            RECONOCIMIENTO: "Reconocimiento"
         }
         return tipos[tipo] || tipo
     }

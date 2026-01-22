@@ -48,7 +48,7 @@ import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 
 const resolucionSchema = z.object({
-    tipoResolucion: z.enum(["APROBACION_PROYECTO", "APROBACION_INFORME_FINAL"]),
+    tipoResolucion: z.enum(["APROBACION_PROYECTO", "APROBACION_INFORME_FINAL", "APROBACION_VIABILIDAD", "RECONOCIMIENTO"]),
     numeroResolucion: z.string().min(1, "El número de resolución es requerido"),
     fechaResolucion: z.date(),
     modalidad: z.enum(["DOCENTES", "ESTUDIANTES", "VOLUNTARIADO", "ACTIVIDAD"]),
@@ -507,6 +507,12 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                                                         </SelectItem>
                                                         <SelectItem value="APROBACION_INFORME_FINAL">
                                                             Aprobación de Informe Final
+                                                        </SelectItem>
+                                                        <SelectItem value="APROBACION_VIABILIDAD">
+                                                            Aprobación de Viabilidad
+                                                        </SelectItem>
+                                                        <SelectItem value="RECONOCIMIENTO">
+                                                            Reconocimiento
                                                         </SelectItem>
                                                     </SelectContent>
                                                 </Select>
