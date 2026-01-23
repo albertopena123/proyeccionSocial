@@ -376,7 +376,7 @@ model Constancia {
   // Datos del estudiante
   studentCode String // Código de estudiante
   fullName    String // Nombre completo
-  dni         String // DNI
+  dni         String? // DNI (opcional)
 
   // Datos del documento
   constanciaNumber String  @unique // Número de constancia

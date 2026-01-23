@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button"
 import { IconUpload } from "@tabler/icons-react"
 
 const constanciaSchema = z.object({
-    dni: z.string().min(1, "El número de documento es requerido"),
+    dni: z.string().optional(),
     studentCode: z.string().min(1, "El código de estudiante es requerido"),
     fullName: z.string().min(1, "El nombre completo es requerido"),
     constanciaNumber: z.string().min(1, "El número de constancia es requerido"),
@@ -135,14 +135,23 @@ export function CreateConstanciaDialog({ children, onSuccess }: CreateConstancia
     // Auto-completar datos del estudiante basado en código
     const handleStudentCodeBlur = async () => {
         const studentCode = form.getValues("studentCode")
-        if (!studentCode) return
+        if (!studentCode || studentCode.length < 8) return
 
         try {
-            const response = await fetch(`/api/student/by-code/${studentCode}`)
+            const response = await fetch("/api/student/consult-by-code", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ codigo: studentCode }),
+            })
             if (response.ok) {
                 const data = await response.json()
-                form.setValue("fullName", data.name || "")
+                // Construir nombre completo: APELLIDOS NOMBRES
+                const fullName = `${data.apellidos} ${data.nombres}`.trim()
+                form.setValue("fullName", fullName || "")
                 form.setValue("dni", data.dni || "")
+                toast.success("Estudiante encontrado")
             }
         } catch (error) {
             // Silenciosamente fallar si no se encuentra el estudiante
@@ -153,14 +162,23 @@ export function CreateConstanciaDialog({ children, onSuccess }: CreateConstancia
     // Auto-completar datos del estudiante basado en DNI
     const handleDniBlur = async () => {
         const dni = form.getValues("dni")
-        if (!dni || dni.length !== 8) return
+        if (!dni || dni.length < 8) return
 
         try {
-            const response = await fetch(`/api/student/by-dni/${dni}`)
+            const response = await fetch("/api/student/consult", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ dni }),
+            })
             if (response.ok) {
                 const data = await response.json()
-                form.setValue("fullName", data.name || "")
-                form.setValue("studentCode", data.studentCode || "")
+                // Construir nombre completo: APELLIDOS NOMBRES
+                const fullName = `${data.apellidos} ${data.nombres}`.trim()
+                form.setValue("fullName", fullName || "")
+                form.setValue("studentCode", data.codigo || "")
+                toast.success("Estudiante encontrado")
             }
         } catch (error) {
             // Silenciosamente fallar si no se encuentra el estudiante
@@ -188,11 +206,11 @@ export function CreateConstanciaDialog({ children, onSuccess }: CreateConstancia
                                 name="dni"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Número de Documento</FormLabel>
+                                        <FormLabel>Número de Documento (Opcional)</FormLabel>
                                         <FormControl>
-                                            <Input 
-                                                {...field} 
-                                                placeholder="Ingrese número de documento"
+                                            <Input
+                                                {...field}
+                                                placeholder="Se completa automáticamente"
                                                 onBlur={() => {
                                                     field.onBlur()
                                                     handleDniBlur()

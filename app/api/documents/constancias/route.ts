@@ -6,7 +6,7 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 
 const createConstanciaSchema = z.object({
-    dni: z.string().min(1),
+    dni: z.string().optional().nullable().transform(val => val === "" ? null : val),
     studentCode: z.string().min(1),
     fullName: z.string().min(1),
     constanciaNumber: z.string().min(1),
