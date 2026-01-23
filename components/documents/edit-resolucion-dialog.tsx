@@ -366,36 +366,62 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
         setEstudiantes(estudiantes.filter((_, i) => i !== index))
     }
 
-    const buscarEstudiante = async (index: number, dniParam?: string) => {
-        const dni = dniParam || estudiantes[index]?.dni
-        if (!dni || dni.length < 8) {
+    const buscarEstudiante = async (index: number, searchValue?: string) => {
+        const valor = searchValue || estudiantes[index]?.dni
+        if (!valor || valor.length < 8) {
             return
         }
 
         const estudianteId = estudiantes[index]?.id || `estudiante_${index}`
 
-        // Evitar búsquedas duplicadas del mismo DNI para el mismo estudiante
-        if (lastSearched.current[estudianteId] === dni) {
+        // Evitar búsquedas duplicadas del mismo valor para el mismo estudiante
+        if (lastSearched.current[estudianteId] === valor) {
             return
         }
 
-        lastSearched.current[estudianteId] = dni
+        lastSearched.current[estudianteId] = valor
 
         try {
-            const response = await fetch("/api/student/consult", {
+            // Primero intentar buscar por DNI
+            let response = await fetch("/api/student/consult", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ dni }),
+                body: JSON.stringify({ dni: valor }),
             })
 
+            let data = null
+            let encontrado = false
+
             if (response.ok) {
-                const data = await response.json()
+                data = await response.json()
+                encontrado = true
+                console.log("Estudiante encontrado por DNI:", data)
+            } else {
+                // Si no se encuentra por DNI, intentar por código
+                console.log("No encontrado por DNI, buscando por código...")
+                response = await fetch("/api/student/consult-by-code", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ codigo: valor }),
+                })
+
+                if (response.ok) {
+                    data = await response.json()
+                    encontrado = true
+                    console.log("Estudiante encontrado por código:", data)
+                }
+            }
+
+            if (encontrado && data) {
+                // Actualizar todos los campos del estudiante
                 const nuevosEstudiantes = [...estudiantes]
                 nuevosEstudiantes[index] = {
                     ...nuevosEstudiantes[index],
-                    dni: dni, // Mantener el DNI que se buscó
+                    dni: data.dni,
                     codigo: data.codigo,
                     nombres: data.nombres,
                     apellidos: data.apellidos
@@ -1109,11 +1135,11 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                                             <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
                                                                 <div className="flex gap-1">
                                                                     <Input
-                                                                        placeholder="N° Documento"
+                                                                        placeholder="DNI o Código"
                                                                         value={estudiante.dni}
                                                                         onChange={(e) => {
-                                                                            const dni = e.target.value.replace(/\D/g, '')
-                                                                            actualizarEstudiante(index, 'dni', dni)
+                                                                            const valor = e.target.value.replace(/\D/g, '')
+                                                                            actualizarEstudiante(index, 'dni', valor)
 
                                                                             const estudianteId = estudiante.id || `estudiante_${index}`
                                                                             const timeoutKey = `timeout_${estudianteId}`
@@ -1124,9 +1150,9 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                                                             }
 
                                                                             // Buscar con debounce cuando tenga 8 dígitos o más
-                                                                            if (dni.length >= 8) {
+                                                                            if (valor.length >= 8) {
                                                                                 searchTimeouts.current[timeoutKey] = setTimeout(() => {
-                                                                                    buscarEstudiante(index, dni)
+                                                                                    buscarEstudiante(index, valor)
                                                                                 }, 500)
                                                                             }
                                                                         }}
