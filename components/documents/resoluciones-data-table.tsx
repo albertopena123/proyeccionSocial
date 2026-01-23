@@ -81,6 +81,7 @@ interface Resolucion {
     fechaResolucion: Date | string
     modalidad: string
     esFinanciado: boolean
+    tipoFinanciamiento?: string | null
     monto?: number | string | null
     dniAsesor: string
     nombreAsesor: string
@@ -190,9 +191,22 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
             DOCENTES: "Docentes",
             ESTUDIANTES: "Estudiantes",
             VOLUNTARIADO: "Voluntariado",
-            ACTIVIDAD: "Actividad"
+            ACTIVIDAD: "Actividad",
+            EXTERNOS: "Externos",
+            ADMINISTRATIVOS: "Administrativos",
+            AUTODIAGNOSTICO: "Autodiagnóstico",
+            EXTENSION_CULTURAL_ARTISTICA: "Extensión Cultural y Artística"
         }
         return labels[modalidad] || modalidad
+    }
+
+    const getTipoFinanciamientoLabel = (tipo: string) => {
+        const labels: Record<string, string> = {
+            FINANCIADO: "Financiado",
+            COFINANCIADO: "Cofinanciado",
+            AUTOFINANCIADO: "Autofinanciado"
+        }
+        return labels[tipo] || tipo
     }
 
     const handleDeleteResolucion = async (resolucionId: string) => {
@@ -358,6 +372,7 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
             header: "Financiamiento",
             cell: ({ row }) => {
                 const esFinanciado = row.original.esFinanciado
+                const tipoFinanciamiento = row.original.tipoFinanciamiento
                 const monto = row.original.monto
 
                 if (!esFinanciado) {
@@ -365,11 +380,18 @@ export function ResolucionesDataTable({ data: initialData, permissions, currentU
                 }
 
                 return (
-                    <div className="flex items-center gap-1">
-                        <IconCurrencyDollar className="h-4 w-4 text-green-600" />
-                        <span className="font-medium">
-                            S/. {typeof monto === 'string' ? parseFloat(monto).toFixed(2) : monto?.toFixed(2) || '0.00'}
-                        </span>
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1">
+                            <IconCurrencyDollar className="h-4 w-4 text-green-600" />
+                            <span className="font-medium text-xs">
+                                {tipoFinanciamiento ? getTipoFinanciamientoLabel(tipoFinanciamiento) : "Financiado"}
+                            </span>
+                        </div>
+                        {monto && (
+                            <span className="text-xs text-muted-foreground">
+                                S/. {typeof monto === 'string' ? parseFloat(monto).toFixed(2) : monto?.toFixed(2) || '0.00'}
+                            </span>
+                        )}
                     </div>
                 )
             },

@@ -53,8 +53,9 @@ const resolucionSchema = z.object({
         (date) => date instanceof Date && !isNaN(date.getTime()),
         { message: "La fecha de resolución es requerida" }
     ),
-    modalidad: z.enum(["DOCENTES", "ESTUDIANTES", "VOLUNTARIADO", "ACTIVIDAD"]),
+    modalidad: z.enum(["DOCENTES", "ESTUDIANTES", "VOLUNTARIADO", "ACTIVIDAD", "EXTERNOS", "ADMINISTRATIVOS", "AUTODIAGNOSTICO", "EXTENSION_CULTURAL_ARTISTICA"]),
     esFinanciado: z.boolean().default(false),
+    tipoFinanciamiento: z.enum(["FINANCIADO", "COFINANCIADO", "AUTOFINANCIADO"]).optional(),
     monto: z.string().optional(),
     dniAsesor: z.string().min(1, "El número de documento es requerido"),
     nombreAsesor: z.string().min(1, "El nombre del asesor es requerido"),
@@ -100,6 +101,7 @@ interface Resolucion {
     fechaResolucion: Date | string
     modalidad: string
     esFinanciado: boolean
+    tipoFinanciamiento?: string | null
     monto?: number | string | null
     dniAsesor: string
     nombreAsesor: string
@@ -175,8 +177,9 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
             tipoResolucion: (resolucion?.tipoResolucion as "APROBACION_PROYECTO" | "APROBACION_INFORME_FINAL" | "APROBACION_VIABILIDAD" | "RECONOCIMIENTO") || "APROBACION_PROYECTO",
             numeroResolucion: resolucion?.numeroResolucion || "",
             fechaResolucion: resolucion?.fechaResolucion ? new Date(resolucion.fechaResolucion) : new Date(),
-            modalidad: (resolucion?.modalidad as "DOCENTES" | "ESTUDIANTES" | "VOLUNTARIADO" | "ACTIVIDAD") || "ESTUDIANTES",
+            modalidad: (resolucion?.modalidad as "DOCENTES" | "ESTUDIANTES" | "VOLUNTARIADO" | "ACTIVIDAD" | "EXTERNOS" | "ADMINISTRATIVOS" | "AUTODIAGNOSTICO" | "EXTENSION_CULTURAL_ARTISTICA") || "ESTUDIANTES",
             esFinanciado: resolucion?.esFinanciado || false,
+            tipoFinanciamiento: (resolucion?.tipoFinanciamiento as "FINANCIADO" | "COFINANCIADO" | "AUTOFINANCIADO") || undefined,
             monto: typeof resolucion?.monto === 'string' ? resolucion.monto : resolucion?.monto?.toString() || "",
             dniAsesor: resolucion?.dniAsesor || "",
             nombreAsesor: resolucion?.nombreAsesor || "",
@@ -419,13 +422,6 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
     async function onSubmit(values: ResolucionFormValues) {
         setIsLoading(true)
         try {
-            // Validaciones
-            if (values.esFinanciado && (!values.monto || parseFloat(values.monto) <= 0)) {
-                toast.error("Debe ingresar un monto válido si el proyecto es financiado")
-                setIsLoading(false)
-                return
-            }
-
             // Validar tamaño de nuevos archivos
             for (const file of newFiles) {
                 if (file.size > 5 * 1024 * 1024) {
@@ -677,6 +673,10 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                                         <SelectItem value="ESTUDIANTES">Estudiantes</SelectItem>
                                                         <SelectItem value="VOLUNTARIADO">Voluntariado</SelectItem>
                                                         <SelectItem value="ACTIVIDAD">Actividad</SelectItem>
+                                                        <SelectItem value="EXTERNOS">Externos</SelectItem>
+                                                        <SelectItem value="ADMINISTRATIVOS">Administrativos</SelectItem>
+                                                        <SelectItem value="AUTODIAGNOSTICO">Autodiagnóstico</SelectItem>
+                                                        <SelectItem value="EXTENSION_CULTURAL_ARTISTICA">Extensión Cultural y Artística</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                                 <FormMessage />
@@ -719,24 +719,52 @@ export function EditResolucionDialog({ resolucion, facultades, open, onOpenChang
                                     {form.watch("esFinanciado") && (
                                         <FormField
                                             control={form.control}
-                                            name="monto"
+                                            name="tipoFinanciamiento"
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel>Monto (S/.)</FormLabel>
-                                                    <FormControl>
-                                                        <Input
-                                                            {...field}
-                                                            type="number"
-                                                            step="0.01"
-                                                            placeholder="0.00"
-                                                        />
-                                                    </FormControl>
+                                                    <FormLabel>Tipo de Financiamiento</FormLabel>
+                                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Selecciona el tipo" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="FINANCIADO">Financiado</SelectItem>
+                                                            <SelectItem value="COFINANCIADO">Cofinanciado</SelectItem>
+                                                            <SelectItem value="AUTOFINANCIADO">Autofinanciado</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
                                                     <FormMessage />
                                                 </FormItem>
                                             )}
                                         />
                                     )}
                                 </div>
+
+                                {form.watch("esFinanciado") && (
+                                    <FormField
+                                        control={form.control}
+                                        name="monto"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Monto (S/.)</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        {...field}
+                                                        type="number"
+                                                        step="0.01"
+                                                        placeholder="0.00"
+                                                    />
+                                                </FormControl>
+                                                <FormDescription>
+                                                    Ingrese el monto del financiamiento (opcional)
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
                             </div>
 
                             <Separator />

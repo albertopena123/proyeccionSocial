@@ -357,7 +357,16 @@ enum ModalidadResolucion {
   ESTUDIANTES
   VOLUNTARIADO
   ACTIVIDAD
-  EXTERNOS // <-- AGREGAR ESTA LÍNEA
+  EXTERNOS
+  ADMINISTRATIVOS
+  AUTODIAGNOSTICO
+  EXTENSION_CULTURAL_ARTISTICA
+}
+
+enum TipoFinanciamiento {
+  FINANCIADO
+  COFINANCIADO
+  AUTOFINANCIADO
 }
 
 // Modelo para Constancias
@@ -452,9 +461,10 @@ model Resolucion {
   fechaResolucion  DateTime
 
   // Modalidad y financiamiento
-  modalidad    ModalidadResolucion // DOCENTES, ESTUDIANTES, VOLUNTARIADO, ACTIVIDAD
-  esFinanciado Boolean             @default(false)
-  monto        Decimal?            @db.Decimal(10, 2) // Solo si esFinanciado = true
+  modalidad         ModalidadResolucion // DOCENTES, ESTUDIANTES, VOLUNTARIADO, ACTIVIDAD
+  esFinanciado      Boolean             @default(false)
+  tipoFinanciamiento TipoFinanciamiento? // FINANCIADO, COFINANCIADO, AUTOFINANCIADO
+  monto             Decimal?            @db.Decimal(10, 2) // Solo si esFinanciado = true
 
   // Datos del asesor
   dniAsesor    String

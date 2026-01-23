@@ -24,6 +24,7 @@ interface ViewResolucionDialogProps {
         fechaResolucion: Date | string
         modalidad: string
         esFinanciado: boolean
+        tipoFinanciamiento?: string | null
         monto?: number | string | null
         dniAsesor: string
         nombreAsesor: string
@@ -88,9 +89,22 @@ export function ViewResolucionDialog({ resolucion, open, onOpenChange }: ViewRes
             DOCENTES: "Docentes",
             ESTUDIANTES: "Estudiantes",
             VOLUNTARIADO: "Voluntariado",
-            ACTIVIDAD: "Actividad"
+            ACTIVIDAD: "Actividad",
+            EXTERNOS: "Externos",
+            ADMINISTRATIVOS: "Administrativos",
+            AUTODIAGNOSTICO: "Autodiagnóstico",
+            EXTENSION_CULTURAL_ARTISTICA: "Extensión Cultural y Artística"
         }
         return modalidades[modalidad] || modalidad
+    }
+
+    const getTipoFinanciamientoLabel = (tipo: string) => {
+        const tipos: Record<string, string> = {
+            FINANCIADO: "Financiado",
+            COFINANCIADO: "Cofinanciado",
+            AUTOFINANCIADO: "Autofinanciado"
+        }
+        return tipos[tipo] || tipo
     }
 
     const getStatusConfig = (status: string) => {
@@ -201,10 +215,26 @@ export function ViewResolucionDialog({ resolucion, open, onOpenChange }: ViewRes
                                 <Separator />
                                 <div className="space-y-4">
                                     <h3 className="text-sm font-semibold">Financiamiento</h3>
-                                    <div className="flex items-center gap-2">
-                                        <IconCash className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-sm">Proyecto Financiado</span>
-                                        <Badge variant="secondary">S/. {typeof resolucion.monto === 'string' ? parseFloat(resolucion.monto).toFixed(2) : resolucion.monto?.toFixed(2) || '0.00'}</Badge>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <IconCash className="h-4 w-4 text-muted-foreground" />
+                                            <span>Tipo:</span>
+                                            <Badge variant="outline">
+                                                {resolucion.tipoFinanciamiento
+                                                    ? getTipoFinanciamientoLabel(resolucion.tipoFinanciamiento)
+                                                    : "Financiado"}
+                                            </Badge>
+                                        </div>
+                                        {resolucion.monto && (
+                                            <div className="flex items-center gap-2">
+                                                <span>Monto:</span>
+                                                <Badge variant="secondary">
+                                                    S/. {typeof resolucion.monto === 'string'
+                                                        ? parseFloat(resolucion.monto).toFixed(2)
+                                                        : resolucion.monto?.toFixed(2) || '0.00'}
+                                                </Badge>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </>

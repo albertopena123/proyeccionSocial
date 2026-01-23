@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { hasPermission } from "@/lib/services/permissions/permissions.service"
-import { PermissionAction, TipoResolucion, ModalidadResolucion } from "@prisma/client"
+import { PermissionAction, TipoResolucion, ModalidadResolucion, TipoFinanciamiento } from "@prisma/client"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { existsSync } from "fs"
@@ -87,6 +87,7 @@ export async function POST(request: Request) {
         const fechaResolucion = formData.get('fechaResolucion') as string
         const modalidad = formData.get('modalidad') as string
         const esFinanciado = formData.get('esFinanciado') === 'true'
+        const tipoFinanciamiento = formData.get('tipoFinanciamiento') as string | null
         const monto = formData.get('monto') as string | null
         const dniAsesor = formData.get('dniAsesor') as string
         const nombreAsesor = formData.get('nombreAsesor') as string
@@ -227,6 +228,7 @@ export async function POST(request: Request) {
                 fechaResolucion: new Date(fechaResolucion),
                 modalidad: modalidad as ModalidadResolucion,
                 esFinanciado,
+                tipoFinanciamiento: esFinanciado && tipoFinanciamiento ? tipoFinanciamiento as TipoFinanciamiento : null,
                 monto: esFinanciado && monto ? parseFloat(monto) : null,
                 dniAsesor,
                 nombreAsesor,

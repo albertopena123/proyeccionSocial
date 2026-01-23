@@ -50,9 +50,22 @@ export function ResolucionDetailModal({ open, onOpenChange, resolucion }: Resolu
             DOCENTES: "Docentes",
             ESTUDIANTES: "Estudiantes",
             VOLUNTARIADO: "Voluntariado",
-            ACTIVIDAD: "Actividad"
+            ACTIVIDAD: "Actividad",
+            EXTERNOS: "Externos",
+            ADMINISTRATIVOS: "Administrativos",
+            AUTODIAGNOSTICO: "Autodiagnóstico",
+            EXTENSION_CULTURAL_ARTISTICA: "Extensión Cultural y Artística"
         }
         return labels[modalidad] || modalidad
+    }
+
+    const getTipoFinanciamientoLabel = (tipo: string) => {
+        const labels: Record<string, string> = {
+            FINANCIADO: "Financiado",
+            COFINANCIADO: "Cofinanciado",
+            AUTOFINANCIADO: "Autofinanciado"
+        }
+        return labels[tipo] || tipo
     }
 
     const getStatusConfig = (status: string) => {
@@ -114,9 +127,14 @@ export function ResolucionDetailModal({ open, onOpenChange, resolucion }: Resolu
                                         <div>
                                             <p className="text-sm font-medium">Financiamiento</p>
                                             <p className="text-sm text-muted-foreground">
-                                                S/. {typeof resolucion.monto === 'string' 
-                                                    ? parseFloat(resolucion.monto).toFixed(2) 
-                                                    : resolucion.monto?.toFixed(2) || '0.00'}
+                                                {resolucion.tipoFinanciamiento
+                                                    ? getTipoFinanciamientoLabel(resolucion.tipoFinanciamiento)
+                                                    : "Financiado"}
+                                                {resolucion.monto && (
+                                                    <> - S/. {typeof resolucion.monto === 'string'
+                                                        ? parseFloat(resolucion.monto).toFixed(2)
+                                                        : resolucion.monto?.toFixed(2) || '0.00'}</>
+                                                )}
                                             </p>
                                         </div>
                                     </div>

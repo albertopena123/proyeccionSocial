@@ -51,8 +51,9 @@ const resolucionSchema = z.object({
     tipoResolucion: z.enum(["APROBACION_PROYECTO", "APROBACION_INFORME_FINAL", "APROBACION_VIABILIDAD", "RECONOCIMIENTO"]),
     numeroResolucion: z.string().min(1, "El número de resolución es requerido"),
     fechaResolucion: z.date(),
-    modalidad: z.enum(["DOCENTES", "ESTUDIANTES", "VOLUNTARIADO", "ACTIVIDAD"]),
+    modalidad: z.enum(["DOCENTES", "ESTUDIANTES", "VOLUNTARIADO", "ACTIVIDAD", "EXTERNOS", "ADMINISTRATIVOS", "AUTODIAGNOSTICO", "EXTENSION_CULTURAL_ARTISTICA"]),
     esFinanciado: z.boolean().default(false),
+    tipoFinanciamiento: z.enum(["FINANCIADO", "COFINANCIADO", "AUTOFINANCIADO"]).optional(),
     monto: z.string().optional(),
     dniAsesor: z.string().min(1, "El número de documento es requerido"),
     nombreAsesor: z.string().min(1, "El nombre del asesor es requerido"),
@@ -328,13 +329,6 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
     async function onSubmit(values: ResolucionFormValues) {
         setIsLoading(true)
         try {
-            // Validar que si es financiado, tenga monto
-            if (values.esFinanciado && (!values.monto || parseFloat(values.monto) <= 0)) {
-                toast.error("Debe ingresar un monto válido si el proyecto es financiado")
-                setIsLoading(false)
-                return
-            }
-
             // Validar tamaño de los archivos antes de enviar
             for (const file of files) {
                 if (file.size > 5 * 1024 * 1024) {
@@ -596,6 +590,10 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                                                         <SelectItem value="ESTUDIANTES">Estudiantes</SelectItem>
                                                         <SelectItem value="VOLUNTARIADO">Voluntariado</SelectItem>
                                                         <SelectItem value="ACTIVIDAD">Actividad</SelectItem>
+                                                        <SelectItem value="EXTERNOS">Externos</SelectItem>
+                                                        <SelectItem value="ADMINISTRATIVOS">Administrativos</SelectItem>
+                                                        <SelectItem value="AUTODIAGNOSTICO">Autodiagnóstico</SelectItem>
+                                                        <SelectItem value="EXTENSION_CULTURAL_ARTISTICA">Extensión Cultural y Artística</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                                 <FormMessage />
@@ -638,24 +636,52 @@ export function CreateResolucionDialog({ children, facultades, onSuccess }: Crea
                                     {form.watch("esFinanciado") && (
                                         <FormField
                                             control={form.control}
-                                            name="monto"
+                                            name="tipoFinanciamiento"
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel>Monto (S/.)</FormLabel>
-                                                    <FormControl>
-                                                        <Input
-                                                            {...field}
-                                                            type="number"
-                                                            step="0.01"
-                                                            placeholder="0.00"
-                                                        />
-                                                    </FormControl>
+                                                    <FormLabel>Tipo de Financiamiento</FormLabel>
+                                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Selecciona el tipo" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="FINANCIADO">Financiado</SelectItem>
+                                                            <SelectItem value="COFINANCIADO">Cofinanciado</SelectItem>
+                                                            <SelectItem value="AUTOFINANCIADO">Autofinanciado</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
                                                     <FormMessage />
                                                 </FormItem>
                                             )}
                                         />
                                     )}
                                 </div>
+
+                                {form.watch("esFinanciado") && (
+                                    <FormField
+                                        control={form.control}
+                                        name="monto"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Monto (S/.)</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        {...field}
+                                                        type="number"
+                                                        step="0.01"
+                                                        placeholder="0.00"
+                                                    />
+                                                </FormControl>
+                                                <FormDescription>
+                                                    Ingrese el monto del financiamiento (opcional)
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
                             </div>
 
                             <Separator />
