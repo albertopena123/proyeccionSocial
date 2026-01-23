@@ -69,7 +69,10 @@ export function CreateConstanciaDialog({ children, onSuccess }: CreateConstancia
             const formData = new FormData()
             formData.append("studentCode", values.studentCode)
             formData.append("fullName", values.fullName)
-            formData.append("dni", values.dni)
+            // Solo agregar dni si tiene contenido
+            if (values.dni && values.dni.trim() !== "") {
+                formData.append("dni", values.dni)
+            }
             formData.append("constanciaNumber", values.constanciaNumber)
             formData.append("year", values.year)
             formData.append("type", "CONSTANCIA") // Tipo fijo
