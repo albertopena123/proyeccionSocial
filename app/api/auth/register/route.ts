@@ -203,16 +203,17 @@ export async function POST(req: Request) {
       // No fallar el registro si los permisos no se asignan, pero registrar el error
     }
 
-    // Enviar email de verificación
-    try {
-      const emailResult = await sendVerificationEmail(user.email, user.name || 'Usuario', verificationToken)
-      if (!emailResult.success) {
-        console.error("Error enviando email de verificación:", emailResult.error)
-      }
-    } catch (emailError) {
-      console.error("Error enviando email de verificación:", emailError)
-      // No fallar el registro si el email no se envía, pero notificar al usuario
-    }
+    // Enviar email de verificación en background (fire-and-forget)
+    // Evita que SMTP lento bloquee la respuesta y genere OS 10054 en el proxy
+    sendVerificationEmail(user.email, user.name || 'Usuario', verificationToken)
+      .then(result => {
+        if (!result.success) {
+          console.error("Error enviando email de verificación:", result.error)
+        }
+      })
+      .catch(emailError => {
+        console.error("Error enviando email de verificación:", emailError)
+      })
 
     return NextResponse.json({
       message: "Usuario registrado exitosamente. Revisa tu correo institucional para activar tu cuenta.",

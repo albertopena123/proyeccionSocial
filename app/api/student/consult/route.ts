@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Llamada a la API externa de UNAMAD
+    // Llamada a la API externa de UNAMAD (timeout 10s para evitar OS 10054 en proxy)
     const response = await fetch(
       `https://daa-documentos.unamad.edu.pe:8081/api/data/student/${dni}`,
       {
@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${process.env.UNAMAD_API_TOKEN}`,
         },
+        signal: AbortSignal.timeout(10000),
       }
     )
 

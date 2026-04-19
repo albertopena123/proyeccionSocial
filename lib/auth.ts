@@ -3,7 +3,6 @@
 import NextAuth from "next-auth"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import CredentialsProvider from "next-auth/providers/credentials"
-import GoogleProvider from "next-auth/providers/google"
 import { prisma } from "./prisma"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
@@ -25,8 +24,6 @@ async function assignDefaultPermissions(userId: string, role: UserRole = UserRol
         // Usuario regular - permisos básicos
         permissionCodes = ['dashboard.access', 'settings.access']
         break
-      // Nota: Por seguridad, usuarios que se registran con Google solo obtienen rol USER
-      // Los administradores deben asignar manualmente roles superiores
     }
 
     const permissions = await prisma.permission.findMany({
@@ -114,94 +111,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
     }),
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          prompt: "consent",
-          access_type: "offline",
-          response_type: "code"
-        }
-      },
-      allowDangerousEmailAccountLinking: true,
-    }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
-      if (!account) return true
-      
-      if (account.provider === "google") {
-        try {
-          const existingUser = await prisma.user.findUnique({
-            where: { email: user.email! },
-            include: { accounts: true }
-          })
-          
-          if (existingUser) {
-            const googleAccount = existingUser.accounts.find(
-              acc => acc.provider === "google"
-            )
-            
-            if (!googleAccount) {
-              await prisma.account.create({
-                data: {
-                  userId: existingUser.id,
-                  type: account.type,
-                  provider: account.provider,
-                  providerAccountId: account.providerAccountId,
-                  refresh_token: account.refresh_token,
-                  access_token: account.access_token,
-                  expires_at: account.expires_at,
-                  token_type: account.token_type,
-                  scope: account.scope,
-                  id_token: account.id_token,
-                  session_state: account.session_state !== undefined && account.session_state !== null
-                    ? String(account.session_state)
-                    : account.session_state,
-                },
-              })
-            }
-            
-            // Actualizar imagen siempre que Google proporcione una nueva
-            if (profile?.picture) {
-              await prisma.user.update({
-                where: { id: existingUser.id },
-                data: { 
-                  image: profile.picture as string,
-                  emailVerified: new Date()
-                }
-              })
-            }
-            
-            user.id = existingUser.id
-            user.role = existingUser.role
-            user.image = (profile?.picture ?? existingUser.image) ?? undefined
-            
-            return true
-          }
-          
-          return true
-        } catch (error) {
-          console.error("Error en signIn callback:", error)
-          return false
-        }
-      }
-      
-      return true
-    },
-    
-    async jwt({ token, user, account, profile, trigger }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id
         token.role = user.role || "USER"
         token.image = user.image
       }
-      
-      if (account?.provider === "google" && profile) {
-        token.image = profile.picture as string
-      }
-      
+
       // Siempre obtener la imagen más reciente de la base de datos
       if (token.email) {
         try {
@@ -239,12 +157,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async createUser({ user }) {
       console.log(`Nuevo usuario creado: ${user.email}`)
-      
-      // Asignar permisos por defecto a usuarios nuevos
-      // Esto se ejecuta cuando un usuario se registra con Google por primera vez
       if (user.id) {
         await assignDefaultPermissions(user.id, UserRole.USER)
-        console.log(`Permisos por defecto asignados a: ${user.email}`)
       }
     },
   },

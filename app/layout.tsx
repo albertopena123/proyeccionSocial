@@ -109,12 +109,6 @@ export const metadata: Metadata = {
     },
   },
 
-  // Verificación de motores de búsqueda (reemplaza con tus códigos reales)
-  verification: {
-    google: "tu-codigo-de-verificacion-google",
-    yandex: "tu-codigo-de-verificacion-yandex",
-  },
-
   // Categoría y clasificación
   category: 'education',
   classification: 'Universidad Pública',
@@ -268,13 +262,12 @@ export default function RootLayout({
           />
         </ThemeProvider>
 
-        {/* Scripts de Analytics (reemplaza con tu ID real) */}
-        {process.env.NODE_ENV === 'production' && (
+        {/* Google Analytics: habilitar cuando NEXT_PUBLIC_GA_ID esté definido */}
+        {process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_GA_ID && (
           <>
-            {/* Google Analytics */}
             <script
               async
-              src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"
+              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_ID}`}
             />
             <script
               dangerouslySetInnerHTML={{
@@ -282,7 +275,7 @@ export default function RootLayout({
                   window.dataLayer = window.dataLayer || [];
                   function gtag(){dataLayer.push(arguments);}
                   gtag('js', new Date());
-                  gtag('config', 'G-XXXXXXXXXX');
+                  gtag('config', '${process.env.NEXT_PUBLIC_GA_ID}');
                 `,
               }}
             />
