@@ -48,7 +48,7 @@ export async function GET(
       )
     }
 
-    // Llamar a la API externa con autenticación
+    // Llamar a la API externa con autenticación (timeout 10s)
     const response = await fetch(
       `https://daa-documentos.unamad.edu.pe:8081/api/getStudentInfo/${code}`,
       {
@@ -57,6 +57,7 @@ export async function GET(
           'Accept': 'application/json',
           'Authorization': `Bearer ${UNAMAD_API_TOKEN}`,
         },
+        signal: AbortSignal.timeout(10000),
       }
     )
 

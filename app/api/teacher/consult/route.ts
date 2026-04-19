@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Llamada a la API externa de UNAMAD
+    // Llamada a la API externa de UNAMAD (timeout 10s)
     const response = await fetch(
       `https://daa-documentos.unamad.edu.pe:8081/api/data/teacher/${dni}`,
       {
@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${process.env.UNAMAD_API_TOKEN}`,
         },
+        signal: AbortSignal.timeout(10000),
       }
     )
 
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Llamada a la API externa de UNAMAD
+    // Llamada a la API externa de UNAMAD (timeout 10s)
     const response = await fetch(
       `https://daa-documentos.unamad.edu.pe:8081/api/data/teacher/${dni}`,
       {
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${process.env.UNAMAD_API_TOKEN}`,
         },
+        signal: AbortSignal.timeout(10000),
       }
     )
 
