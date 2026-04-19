@@ -11,12 +11,12 @@
     "dev": "node scripts/dev-server.js",
     "dev:next": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3001",
     "lint": "next lint",
     "stop": "node scripts/stop-all.js",
     "clean": "node scripts/clean-restart.js",
     "clean:full": "node scripts/clean-restart.js --reinstall",
-    "test:email": "curl http://localhost:3000/api/test-email"
+    "test:email": "curl https://proyeccionsocial.unamad.edu.pe/api/test-email"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
