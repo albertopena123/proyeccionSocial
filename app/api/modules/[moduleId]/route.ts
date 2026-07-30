@@ -25,6 +25,13 @@ export async function GET(
             return NextResponse.json({ error: "No autorizado" }, { status: 401 })
         }
 
+        // Mismo criterio que el listado: la configuración de módulos y permisos
+        // es información de administración.
+        const canView = await hasPermission(session.user.id, "roles.access", PermissionAction.READ)
+        if (!canView) {
+            return NextResponse.json({ error: "Sin permisos para ver módulos" }, { status: 403 })
+        }
+
         const { moduleId } = await params
         const foundModule = await prisma.module.findUnique({
             where: { id: moduleId },

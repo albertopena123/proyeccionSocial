@@ -1,19 +1,37 @@
 import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/auth"
+import { rateLimit, rateLimitResponse } from "@/lib/security/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
+    // Esta ruta expone la ficha completa de un estudiante (DNI, correos, carrera)
+    // consultando la API de la universidad con el token del servidor. Sin sesión,
+    // cualquiera podía recorrer el espacio de DNIs y extraer el padrón entero.
+    const session = await auth()
+    if (!session) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const limit = rateLimit(`student-consult:${session.user.id}`, 60, 60_000)
+    if (!limit.allowed) {
+      return rateLimitResponse(limit, "Demasiadas consultas. Intenta de nuevo en unos segundos.")
+    }
+
     const { dni } = await request.json()
 
-    if (!dni) {
+    // El valor se interpola en la URL de la API externa: sin validar, un "../"
+    // redirige la petición a otro endpoint del servidor de la universidad
+    // llevándose nuestro token de autorización.
+    if (typeof dni !== "string" || !/^\d{8}$/.test(dni)) {
       return NextResponse.json(
-        { error: "DNI es requerido" },
+        { error: "DNI inválido. Debe tener 8 dígitos" },
         { status: 400 }
       )
     }
 
     // Llamada a la API externa de UNAMAD (timeout 10s para evitar OS 10054 en proxy)
     const response = await fetch(
-      `https://daa-documentos.unamad.edu.pe:8081/api/data/student/${dni}`,
+      `https://daa-documentos.unamad.edu.pe:8081/api/data/student/${encodeURIComponent(dni)}`,
       {
         method: "GET",
         headers: {
@@ -35,7 +53,6 @@ export async function POST(request: NextRequest) {
     }
 
     const apiResponse = await response.json()
-    console.log("Respuesta del API UNAMAD:", apiResponse)
 
     // Verificar si la respuesta tiene el formato esperado
     if (!apiResponse.data || !Array.isArray(apiResponse.data) || apiResponse.data.length === 0) {
@@ -64,11 +81,12 @@ export async function POST(request: NextRequest) {
       facultad: studentData.facultyName,
       creditosAprobados: totalCredits
     }
-    console.log("Datos formateados:", formattedData)
 
     return NextResponse.json(formattedData)
   } catch (error) {
-    console.error("Error al consultar estudiante:", error)
+    // Sin volcar la respuesta: los logs de PM2 acababan con el DNI y los correos
+    // de cada consulta en texto claro.
+    console.error("Error al consultar estudiante:", error instanceof Error ? error.message : error)
     return NextResponse.json(
       { error: "Error al consultar la información del estudiante" },
       { status: 500 }

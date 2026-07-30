@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/security/rate-limit"
 
 const resetPasswordSchema = z.object({
   token: z.string().min(1, "Token requerido"),
@@ -14,6 +15,13 @@ const resetPasswordSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    // Sin límite, el token de recuperación (32 bytes) se puede intentar adivinar
+    // sin coste alguno.
+    const limit = rateLimit(`reset-password:${clientIp(req)}`, 10, 15 * 60_000)
+    if (!limit.allowed) {
+      return rateLimitResponse(limit, "Demasiados intentos. Intenta de nuevo en unos minutos.")
+    }
+
     const body = await req.json()
     
     // Validar entrada

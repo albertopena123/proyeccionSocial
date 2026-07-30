@@ -1,18 +1,32 @@
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { hasPermission } from "@/lib/services/permissions/permissions.service"
+import { PermissionAction } from "@prisma/client"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
+import {
+    DOCUMENT_MIME_TYPES,
+    UPLOADS_ROOT,
+    sanitizeFileNameSegment,
+    sanitizeOriginalFileName,
+    validateUpload,
+} from "@/lib/security/uploads"
 
 const updateConstanciaSchema = z.object({
-    dni: z.string().min(1).optional(),
-    studentCode: z.string().min(1).optional(),
-    fullName: z.string().min(1).optional(),
-    constanciaNumber: z.string().min(1).optional(),
-    year: z.string().transform(val => parseInt(val)).optional(),
-    observation: z.string().nullable().optional(),
-    status: z.enum(["PENDIENTE", "APROBADO", "RECHAZADO", "ANULADO"]).optional(),
+    dni: z.string().max(20).min(1).optional(),
+    studentCode: z.string().max(20).min(1).optional(),
+    fullName: z.string().max(200).min(1).optional(),
+    constanciaNumber: z
+        .string()
+        .min(1)
+        .max(60)
+        .regex(/^[A-Za-z0-9 ._#-]+$/, "El numero de constancia contiene caracteres no permitidos")
+        .refine((value) => !value.includes(".."), "El numero de constancia contiene caracteres no permitidos")
+        .optional(),
+    year: z.string().regex(/^\d{4}$/, "Año inválido").transform(val => parseInt(val)).optional(),
+    observation: z.string().max(2000).nullable().optional(),
 })
 
 // GET /api/documents/constancias/[id] - Obtener una constancia
@@ -22,11 +36,19 @@ export async function GET(
 ) {
     try {
         const session = await auth()
-        
+
         if (!session) {
             return NextResponse.json(
                 { error: "No autorizado" },
                 { status: 401 }
+            )
+        }
+
+        const canRead = await hasPermission(session.user.id, "constancias.access", PermissionAction.READ)
+        if (!canRead) {
+            return NextResponse.json(
+                { error: "Sin permisos para ver constancias" },
+                { status: 403 }
             )
         }
 
@@ -78,11 +100,19 @@ export async function PATCH(
 ) {
     try {
         const session = await auth()
-        
+
         if (!session) {
             return NextResponse.json(
                 { error: "No autorizado" },
                 { status: 401 }
+            )
+        }
+
+        const canUpdate = await hasPermission(session.user.id, "constancias.access", PermissionAction.UPDATE)
+        if (!canUpdate) {
+            return NextResponse.json(
+                { error: "Sin permisos para actualizar constancias" },
+                { status: 403 }
             )
         }
 
@@ -119,19 +149,20 @@ export async function PATCH(
         }
 
         const formData = await request.formData()
-        
+
         // Extraer datos del FormData
         const rawData: Record<string, string | null> = {}
         const textFields = ['studentCode', 'fullName', 'dni', 'constanciaNumber', 'year', 'observation']
-        
+
         for (const field of textFields) {
             const value = formData.get(field)
             if (value !== null) {
                 rawData[field] = value as string
             }
         }
-        
-        // Validar datos
+
+        // `status` no se acepta aquí: aprobar o rechazar pasa por sus propias
+        // rutas, que además registran quién lo hizo.
         const validatedData = updateConstanciaSchema.parse(rawData)
 
         // Si se está cambiando el número de constancia, verificar que no exista
@@ -153,45 +184,23 @@ export async function PATCH(
         // Procesar archivo si existe
         let fileData = {}
         const file = formData.get("file") as File | null
-        
+
         if (file && file.size > 0) {
-            // Validar tipo de archivo
-            const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
-            if (!allowedTypes.includes(file.type)) {
-                return NextResponse.json(
-                    { error: "Tipo de archivo no permitido" },
-                    { status: 400 }
-                )
+            const validation = await validateUpload(file, DOCUMENT_MIME_TYPES)
+            if (!validation.ok) {
+                return NextResponse.json({ error: validation.error }, { status: 400 })
             }
 
-            // Validar tamaño (máximo 5MB)
-            if (file.size > 5 * 1024 * 1024) {
-                return NextResponse.json(
-                    { error: "El archivo supera el tamaño máximo de 5MB" },
-                    { status: 400 }
-                )
-            }
+            const numberForFile = validatedData.constanciaNumber || existingConstancia.constanciaNumber
+            const safeNumber = sanitizeFileNameSegment(numberForFile, "constancia")
+            const fileName = `${safeNumber}_${Date.now()}${validation.extension}`
+            const uploadDir = path.join(UPLOADS_ROOT, "constancias")
 
-            // Generar nombre único para el archivo
-            const bytes = await file.arrayBuffer()
-            const buffer = Buffer.from(bytes)
-            
-            const fileExt = path.extname(file.name)
-            const fileName = `${validatedData.constanciaNumber || existingConstancia.constanciaNumber}_${Date.now()}${fileExt}`
-            const uploadDir = path.join(process.cwd(), "public", "uploads", "constancias")
-            
-            // Crear directorio si no existe
-            try {
-                await mkdir(uploadDir, { recursive: true })
-            } catch (error) {
-                console.log("Directory already exists or created")
-            }
-            
-            const filePath = path.join(uploadDir, fileName)
-            await writeFile(filePath, buffer)
-            
+            await mkdir(uploadDir, { recursive: true })
+            await writeFile(path.join(uploadDir, fileName), validation.buffer)
+
             fileData = {
-                fileName: file.name,
+                fileName: sanitizeOriginalFileName(file.name, validation.extension),
                 fileUrl: `/api/documents/files/constancias/${fileName}`,
                 fileSize: file.size,
                 fileMimeType: file.type
@@ -249,11 +258,19 @@ export async function DELETE(
 ) {
     try {
         const session = await auth()
-        
+
         if (!session) {
             return NextResponse.json(
                 { error: "No autorizado" },
                 { status: 401 }
+            )
+        }
+
+        const canDelete = await hasPermission(session.user.id, "constancias.access", PermissionAction.DELETE)
+        if (!canDelete) {
+            return NextResponse.json(
+                { error: "Sin permisos para eliminar constancias" },
+                { status: 403 }
             )
         }
 

@@ -3,7 +3,8 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { hasPermission } from "@/lib/services/permissions/permissions.service"
 import { z } from "zod"
-import { UserRole } from "@prisma/client"
+import { UserRole, PermissionAction } from "@prisma/client"
+import { actorRole, canGrantRole, roleRank } from "@/lib/security/authz"
 
 const assignPermissionsSchema = z.object({
   userId: z.string().optional(),
@@ -22,13 +23,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    const canManageRoles = await hasPermission(session.user.id, "roles.access")
+    // hasPermission sin acción se conforma con READ: alguien con acceso de sólo
+    // lectura a roles podía concederse cualquier permiso del sistema.
+    const canManageRoles = await hasPermission(session.user.id, "roles.access", PermissionAction.UPDATE)
     if (!canManageRoles) {
+      return NextResponse.json({ error: "Sin permisos para asignar permisos" }, { status: 403 })
+    }
+
+    // Repartir permisos es, en la práctica, repartir privilegios: se reserva a
+    // administradores en lugar de a cualquier portador de roles.access.
+    const currentRole = await actorRole(session.user.id)
+    if (!currentRole || roleRank(currentRole) < roleRank(UserRole.ADMIN)) {
       return NextResponse.json({ error: "Sin permisos para asignar permisos" }, { status: 403 })
     }
 
     const body = await request.json()
     const validatedData = assignPermissionsSchema.parse(body)
+
+    // No se puede repartir permisos a un rol igual o superior al propio.
+    if (validatedData.role && !canGrantRole(currentRole, validatedData.role)) {
+      return NextResponse.json(
+        { error: "No puedes modificar los permisos de un rol igual o superior al tuyo" },
+        { status: 403 }
+      )
+    }
 
     // Si es por rol, obtener todos los usuarios con ese rol
     let userIds: string[] = []
@@ -39,6 +57,22 @@ export async function POST(request: NextRequest) {
       })
       userIds = users.map(u => u.id)
     } else if (validatedData.userId) {
+      const target = await prisma.user.findUnique({
+        where: { id: validatedData.userId },
+        select: { role: true }
+      })
+
+      if (!target) {
+        return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
+      }
+
+      if (validatedData.userId !== session.user.id && !canGrantRole(currentRole, target.role)) {
+        return NextResponse.json(
+          { error: "No puedes modificar los permisos de un usuario con un rol igual o superior al tuyo" },
+          { status: 403 }
+        )
+      }
+
       userIds = [validatedData.userId]
     }
 

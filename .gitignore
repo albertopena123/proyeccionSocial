@@ -48,3 +48,6 @@ next-env.d.ts
 # uploads - archivos subidos por usuarios
 /public/uploads/
 /uploads/
+
+# logs de pm2
+logs/

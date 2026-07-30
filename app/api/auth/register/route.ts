@@ -7,6 +7,7 @@ import { z } from "zod"
 import crypto from "crypto"
 import { sendVerificationEmail } from "@/lib/email"
 import { UserRole, PermissionAction } from "@prisma/client"
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/security/rate-limit"
 
 const registerSchema = z.object({
   studentCode: z.string()
@@ -80,6 +81,14 @@ function getActionsForRoleAndPermission(role: UserRole, permissionCode: string):
 
 export async function POST(req: Request) {
   try {
+    // El registro crea cuentas y dispara correos: sin límite sirve para inundar
+    // la base de datos y para usar el servidor de correo institucional como
+    // lanzadera de spam.
+    const limit = rateLimit(`register:${clientIp(req)}`, 5, 60 * 60_000)
+    if (!limit.allowed) {
+      return rateLimitResponse(limit, "Demasiados registros desde esta conexión. Intenta de nuevo más tarde.")
+    }
+
     const body = await req.json()
     const validatedData = registerSchema.parse(body)
     

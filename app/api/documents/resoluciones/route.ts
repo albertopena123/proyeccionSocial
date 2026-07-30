@@ -5,7 +5,12 @@ import { hasPermission } from "@/lib/services/permissions/permissions.service"
 import { PermissionAction, TipoResolucion, ModalidadResolucion, TipoFinanciamiento } from "@prisma/client"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
-import { existsSync } from "fs"
+import {
+    DOCUMENT_MIME_TYPES,
+    UPLOADS_ROOT,
+    sanitizeOriginalFileName,
+    validateUpload,
+} from "@/lib/security/uploads"
 
 export async function GET(request: NextRequest) {
     try {
@@ -128,44 +133,31 @@ export async function POST(request: Request) {
         }> = []
 
         if (files && files.length > 0) {
-            // Crear directorio si no existe
-            const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'resoluciones')
-            if (!existsSync(uploadDir)) {
-                await mkdir(uploadDir, { recursive: true })
-            }
+            // Los archivos se guardan fuera de /public: lo que vive ahí lo sirve
+            // Next en estático, sin comprobar sesión ni estado del documento.
+            const uploadDir = path.join(UPLOADS_ROOT, 'resoluciones')
+            await mkdir(uploadDir, { recursive: true })
 
             for (const file of files) {
                 if (file.size > 0) {
-                    // Validar tipo de archivo
-                    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
-                    if (!allowedTypes.includes(file.type)) {
+                    const validation = await validateUpload(file, DOCUMENT_MIME_TYPES)
+                    if (!validation.ok) {
                         return NextResponse.json(
-                            { error: `Tipo de archivo no permitido: ${file.name}` },
+                            { error: `${validation.error}: ${file.name}` },
                             { status: 400 }
                         )
                     }
 
-                    // Validar tamaño (5MB)
-                    if (file.size > 5 * 1024 * 1024) {
-                        return NextResponse.json(
-                            { error: `El archivo ${file.name} supera los 5MB` },
-                            { status: 400 }
-                        )
-                    }
-
-                    // Generar nombre único para el archivo
+                    // La extensión sale del tipo MIME verificado, no del nombre que
+                    // envía el cliente: un ".html" o ".svg" servido desde nuestro
+                    // origen ejecuta JavaScript con la sesión de quien lo abre.
                     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-                    const fileExtension = path.extname(file.name)
-                    const savedFileName = `${uniqueSuffix}${fileExtension}`
-                    const filePath = path.join(uploadDir, savedFileName)
+                    const savedFileName = `${uniqueSuffix}${validation.extension}`
 
-                    // Guardar archivo
-                    const bytes = await file.arrayBuffer()
-                    const buffer = Buffer.from(bytes)
-                    await writeFile(filePath, buffer)
+                    await writeFile(path.join(uploadDir, savedFileName), validation.buffer)
 
                     archivosParaGuardar.push({
-                        fileName: file.name,
+                        fileName: sanitizeOriginalFileName(file.name, validation.extension),
                         fileUrl: `/api/documents/files/resoluciones/${savedFileName}`,
                         fileSize: file.size,
                         fileMimeType: file.type,

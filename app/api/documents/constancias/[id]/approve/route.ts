@@ -1,5 +1,7 @@
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { hasPermission } from "@/lib/services/permissions/permissions.service"
+import { PermissionAction } from "@prisma/client"
 import { NextResponse } from "next/server"
 
 // POST /api/documents/constancias/[id]/approve - Aprobar una constancia
@@ -9,11 +11,22 @@ export async function POST(
 ) {
     try {
         const session = await auth()
-        
+
         if (!session) {
             return NextResponse.json(
                 { error: "No autorizado" },
                 { status: 401 }
+            )
+        }
+
+        // Aprobar publica la constancia en la consulta ciudadana. Sin esta
+        // comprobación cualquier usuario con sesión podía crear una constancia y
+        // aprobarla acto seguido, emitiendo un documento oficial falso.
+        const canApprove = await hasPermission(session.user.id, "constancias.access", PermissionAction.UPDATE)
+        if (!canApprove) {
+            return NextResponse.json(
+                { error: "Sin permisos para aprobar constancias" },
+                { status: 403 }
             )
         }
 
@@ -65,6 +78,20 @@ export async function POST(
                         name: true,
                         email: true
                     }
+                }
+            }
+        })
+
+        await prisma.auditLog.create({
+            data: {
+                userId: session.user.id,
+                action: 'constancias.approved',
+                entity: 'Constancia',
+                entityId: id,
+                metadata: {
+                    constanciaNumber: existingConstancia.constanciaNumber,
+                    ip: request.headers.get('x-forwarded-for') || 'unknown',
+                    userAgent: request.headers.get('user-agent') || 'unknown'
                 }
             }
         })

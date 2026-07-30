@@ -22,6 +22,13 @@ export async function GET() {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 })
         }
 
+        // Devuelve el árbol completo de módulos y permisos del sistema; es
+        // información de administración, no algo que deba ver cualquier usuario.
+        const canView = await hasPermission(session.user.id, "roles.access", PermissionAction.READ)
+        if (!canView) {
+            return NextResponse.json({ error: "Sin permisos para ver módulos" }, { status: 403 })
+        }
+
         const modules = await prisma.module.findMany({
             include: {
                 submodules: {

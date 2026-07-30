@@ -2,7 +2,12 @@ module.exports = {
   apps: [{
     name: 'proyeccion-social',
     script: './node_modules/next/dist/bin/next',
-    args: 'start -p 3001',
+    // -H 127.0.0.1 es imprescindible, no redundante con el HOSTNAME de env: se
+    // comprobo el 29/07/2026 que Next 15 IGNORA esa variable y abre el socket en
+    // "::" (todas las interfaces). Sin este flag la app quedaba accesible en
+    // claro por http://192.168.254.17:3001, saltandose el TLS de Apache.
+    // Se entra solo por proyeccionsocial.unamad.edu.pe (proxy inverso).
+    args: 'start -p 3001 -H 127.0.0.1',
     cwd: './',
     instances: 1,
     autorestart: true,

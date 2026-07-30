@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/security/rate-limit"
 import { sendWelcomeEmail } from "@/lib/email"
 
 const verifyEmailSchema = z.object({
@@ -11,6 +12,12 @@ const verifyEmailSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    // Evita el intento sistemático de tokens de verificación.
+    const limit = rateLimit(`verify-email:${clientIp(req)}`, 20, 15 * 60_000)
+    if (!limit.allowed) {
+      return rateLimitResponse(limit, "Demasiados intentos. Intenta de nuevo en unos minutos.")
+    }
+
     const body = await req.json()
     const validatedData = verifyEmailSchema.parse(body)
     const { token } = validatedData

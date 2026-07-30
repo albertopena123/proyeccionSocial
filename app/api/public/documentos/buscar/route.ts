@@ -1,13 +1,38 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/security/rate-limit"
+
+// Deja visibles los dos últimos dígitos, suficiente para que quien ya conoce su
+// documento reconozca el suyo, inútil para construir un listado de DNIs.
+function maskDni(dni: string | null): string | null {
+  if (!dni) return dni
+  if (dni.length <= 2) return "*".repeat(dni.length)
+  return "*".repeat(dni.length - 2) + dni.slice(-2)
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { query } = await request.json()
 
-    if (!query || query.trim().length < 3) {
+    // Endpoint sin autenticar: sin límite se puede recorrer el abecedario y
+    // vaciar el registro de documentos aprobados, 50 fichas por petición.
+    const limit = rateLimit(`documentos-buscar:${clientIp(request)}`, 20, 5 * 60_000)
+    if (!limit.allowed) {
+      return rateLimitResponse(limit, "Demasiadas búsquedas. Intenta de nuevo en unos minutos.")
+    }
+
+    // typeof: sin esta comprobación un número o un objeto revientan en .trim() y
+    // devuelven un 500.
+    if (typeof query !== "string" || query.trim().length < 3) {
       return NextResponse.json(
         { error: "El término de búsqueda debe tener al menos 3 caracteres" },
+        { status: 400 }
+      )
+    }
+
+    if (query.trim().length > 100) {
+      return NextResponse.json(
+        { error: "El término de búsqueda es demasiado largo" },
         { status: 400 }
       )
     }
@@ -237,14 +262,19 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Convertir Decimal a string para serialización
+    // Convertir Decimal a string para serialización y enmascarar documentos de
+    // identidad: la consulta es pública y devolvía el DNI completo de estudiantes
+    // y asesores, así que servía para cosechar datos personales en bloque.
     const resolucionesSerializables = resoluciones.map(res => ({
       ...res,
-      monto: res.monto ? res.monto.toString() : null
+      monto: res.monto ? res.monto.toString() : null,
+      estudiantes: res.estudiantes.map(est => ({ ...est, dni: maskDni(est.dni) }))
     }))
 
+    const constanciasPublicas = constancias.map(c => ({ ...c, dni: maskDni(c.dni) }))
+
     return NextResponse.json({
-      constancias,
+      constancias: constanciasPublicas,
       resoluciones: resolucionesSerializables,
       total: constancias.length + resoluciones.length
     })

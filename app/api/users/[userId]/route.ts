@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { hasPermission } from "@/lib/services/permissions/permissions.service"
 import { z } from "zod"
 import { UserRole, PermissionAction } from "@prisma/client"
+import { actorRole, canGrantRole, canManageRole } from "@/lib/security/authz"
 
 const updateUserSchema = z.object({
   email: z.string().email("Email inválido").optional(),
@@ -33,6 +34,15 @@ export async function GET(
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
+      // Devolvía el hash de contraseña y los tokens de verificación y de
+      // recuperación. Como un usuario puede leer su propia ficha, cualquiera con
+      // sesión obtenía su propio hash, y quien tuviera users.access el de todos.
+      omit: {
+        password: true,
+        verificationToken: true,
+        resetPasswordToken: true,
+        resetPasswordExpires: true,
+      },
       include: {
         permissions: {
           include: {
@@ -89,6 +99,28 @@ export async function PATCH(
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
     }
 
+    // users.access sólo dice "puede editar usuarios". Faltaba comprobar a QUIÉN:
+    // un moderador con ese permiso podía ascenderse a SUPER_ADMIN, cambiar el
+    // correo de un administrador o reasignarle permisos.
+    const currentRole = await actorRole(session.user.id)
+    if (!currentRole) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    if (session.user.id !== userId && !canManageRole(currentRole, existingUser.role)) {
+      return NextResponse.json(
+        { error: "No puedes modificar un usuario con un rol igual o superior al tuyo" },
+        { status: 403 }
+      )
+    }
+
+    if (validatedData.role && validatedData.role !== existingUser.role && !canGrantRole(currentRole, validatedData.role)) {
+      return NextResponse.json(
+        { error: "No puedes asignar un rol igual o superior al tuyo" },
+        { status: 403 }
+      )
+    }
+
     // Si se cambia el email, verificar que no exista
     if (validatedData.email && validatedData.email !== existingUser.email) {
       const emailExists = await prisma.user.findUnique({
@@ -103,6 +135,12 @@ export async function PATCH(
     // Actualizar usuario
     const updatedUser = await prisma.user.update({
       where: { id: userId },
+      omit: {
+        password: true,
+        verificationToken: true,
+        resetPasswordToken: true,
+        resetPasswordExpires: true,
+      },
       data: {
         ...(validatedData.email && { email: validatedData.email.toLowerCase() }),
         ...(validatedData.name && { name: validatedData.name }),
@@ -194,6 +232,16 @@ export async function DELETE(
 
     if (!existingUser) {
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
+    }
+
+    // Comprobar el rol del objetivo, no sólo el permiso: sin esto un moderador
+    // con users.access podía borrar administradores.
+    const currentRole = await actorRole(session.user.id)
+    if (!currentRole || !canManageRole(currentRole, existingUser.role)) {
+      return NextResponse.json(
+        { error: "No puedes eliminar un usuario con un rol igual o superior al tuyo" },
+        { status: 403 }
+      )
     }
 
     // No permitir eliminar al último SUPER_ADMIN

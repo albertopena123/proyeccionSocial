@@ -15,8 +15,7 @@
     "lint": "next lint",
     "stop": "node scripts/stop-all.js",
     "clean": "node scripts/clean-restart.js",
-    "clean:full": "node scripts/clean-restart.js --reinstall",
-    "test:email": "curl https://proyeccionsocial.unamad.edu.pe/api/test-email"
+    "clean:full": "node scripts/clean-restart.js --reinstall"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

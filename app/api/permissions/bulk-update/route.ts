@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { hasPermission } from "@/lib/services/permissions/permissions.service"
 import { z } from "zod"
 import { UserRole, PermissionAction } from "@prisma/client"
+import { actorRole, canGrantRole, roleRank } from "@/lib/security/authz"
 
 const rolePermissionSchema = z.object({
     roleId: z.nativeEnum(UserRole),
@@ -23,14 +24,30 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 })
         }
 
-        // Verificar permisos - usando el nuevo sistema simplificado
-        const canManage = await hasPermission(session.user.id, "roles.access")
+        // hasPermission sin acción se conforma con READ: acceso de sólo lectura a
+        // roles permitía reescribir los permisos de todo el sistema.
+        const canManage = await hasPermission(session.user.id, "roles.access", PermissionAction.UPDATE)
         if (!canManage) {
+            return NextResponse.json({ error: "Sin permisos para gestionar roles" }, { status: 403 })
+        }
+
+        const currentRole = await actorRole(session.user.id)
+        if (!currentRole || roleRank(currentRole) < roleRank(UserRole.ADMIN)) {
             return NextResponse.json({ error: "Sin permisos para gestionar roles" }, { status: 403 })
         }
 
         const body = await request.json()
         const validatedData = bulkUpdateSchema.parse(body)
+
+        // Sin esto, un ADMIN se concedía a sí mismo los permisos de SUPER_ADMIN
+        // reescribiendo los de su propio rol o de uno superior.
+        const forbidden = validatedData.changes.find(change => !canGrantRole(currentRole, change.roleId))
+        if (forbidden) {
+            return NextResponse.json(
+                { error: "No puedes modificar los permisos de un rol igual o superior al tuyo" },
+                { status: 403 }
+            )
+        }
 
         // Procesar cada cambio individualmente
         for (const change of validatedData.changes) {

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { hasPermission } from "@/lib/services/permissions/permissions.service"
+import { PermissionAction } from "@prisma/client"
+import { actorRole, canManageRole } from "@/lib/security/authz"
 
 // POST /api/users/[userId]/toggle-status - Activar/Desactivar usuario
 export async function POST(
@@ -15,7 +17,8 @@ export async function POST(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    const canManage = await hasPermission(session.user.id, "users.access")
+    // Sin acción concreta, hasPermission acepta un permiso de sólo lectura.
+    const canManage = await hasPermission(session.user.id, "users.access", PermissionAction.UPDATE)
     if (!canManage) {
       return NextResponse.json({ error: "Sin permisos para cambiar estado de usuarios" }, { status: 403 })
     }
@@ -33,11 +36,25 @@ export async function POST(
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
     }
 
-    // Toggle del estado verificado del email (usado como indicador de activo/inactivo)
+    // Comprobar el rol del objetivo: sin esto un moderador podía desactivar a los
+    // administradores y dejar el sistema sin quien lo gobierne.
+    const currentRole = await actorRole(session.user.id)
+    if (!currentRole || !canManageRole(currentRole, user.role)) {
+      return NextResponse.json(
+        { error: "No puedes cambiar el estado de un usuario con un rol igual o superior al tuyo" },
+        { status: 403 }
+      )
+    }
+
+    // Se actualiza también isActive, que es el campo que comprueba el login.
+    // Antes sólo se tocaba emailVerified, así que "desactivar" a un usuario no le
+    // impedía entrar: seguía autenticándose con normalidad.
+    const activate = !user.emailVerified
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        emailVerified: user.emailVerified ? null : new Date()
+        emailVerified: activate ? new Date() : null,
+        isActive: activate
       }
     })
 

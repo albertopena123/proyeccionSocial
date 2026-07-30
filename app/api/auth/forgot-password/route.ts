@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import crypto from "crypto"
 import { sendPasswordResetEmail } from "@/lib/email"
 import { z } from "zod"
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/security/rate-limit"
 
 const forgotPasswordSchema = z.object({
   email: z.string()
@@ -17,6 +18,13 @@ function generateResetToken(): string {
 
 export async function POST(req: Request) {
   try {
+    // Cada petición manda un correo a una dirección institucional: sin límite se
+    // puede bombardear el buzón de cualquier usuario y agotar la cuota SMTP.
+    const limit = rateLimit(`forgot-password:${clientIp(req)}`, 5, 15 * 60_000)
+    if (!limit.allowed) {
+      return rateLimitResponse(limit, "Demasiadas solicitudes. Intenta de nuevo en unos minutos.")
+    }
+
     const body = await req.json()
     
     // Validar entrada

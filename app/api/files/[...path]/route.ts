@@ -3,6 +3,16 @@ import { readFile } from "fs/promises"
 import path from "path"
 import { existsSync } from "fs"
 import { auth } from "@/lib/auth"
+import {
+    LEGACY_UPLOADS_ROOT,
+    UPLOADS_ROOT,
+    isInlineSafe,
+    resolveWithinRoot,
+    serveContentType,
+} from "@/lib/security/uploads"
+
+// Sólo estas carpetas son alcanzables por esta ruta.
+const SERVED_DIRECTORIES = ["avatars", "constancias", "resoluciones"]
 
 // GET - Servir archivos dinámicamente
 export async function GET(
@@ -10,47 +20,42 @@ export async function GET(
     { params }: { params: Promise<{ path: string[] }> }
 ) {
     try {
-        // Await the params
         const { path: pathSegments } = await params
-        
-        // Verificar autenticación para archivos privados
+
+        // Todos los archivos servidos por aquí requieren sesión. Los avatares no
+        // son públicos: la URL contiene el id del usuario y permitía enumerar la
+        // plantilla completa sin autenticarse.
         const session = await auth()
-        
-        // Para avatares, permitir acceso público o autenticado
-        const isConstancia = pathSegments[0] === 'constancias'
-        const isResolucion = pathSegments[0] === 'resoluciones'
-        
-        // Si es un archivo de constancia o resolución, requiere autenticación
-        if ((isConstancia || isResolucion) && !session) {
-            return NextResponse.json(
-                { error: "No autorizado" },
-                { status: 401 }
-            )
+        if (!session) {
+            return NextResponse.json({ error: "No autorizado" }, { status: 401 })
         }
-        
-        // Construir la ruta del archivo
-        // Los archivos se guardan en la carpeta 'uploads' en la raíz del proyecto
-        const filePath = path.join(process.cwd(), "uploads", ...pathSegments)
-        
-        // Verificar que el archivo existe
-        if (!existsSync(filePath)) {
-            // Si no existe, intentar con la carpeta public como fallback (para archivos antiguos)
-            const publicPath = path.join(process.cwd(), "public", "uploads", ...pathSegments)
-            if (existsSync(publicPath)) {
-                const file = await readFile(publicPath)
-                return serveFile(file, publicPath)
-            }
-            
-            return NextResponse.json(
-                { error: "Archivo no encontrado" },
-                { status: 404 }
-            )
+
+        if (!SERVED_DIRECTORIES.includes(pathSegments[0])) {
+            return NextResponse.json({ error: "Ruta no permitida" }, { status: 403 })
         }
-        
-        // Leer el archivo
-        const file = await readFile(filePath)
-        
-        return serveFile(file, filePath)
+
+        // Los segmentos llegan ya decodificados, así que hay que comprobar la
+        // ruta resuelta contra la raíz en lugar de confiar en path.join.
+        const filePath = resolveWithinRoot(UPLOADS_ROOT, pathSegments)
+        const legacyPath = resolveWithinRoot(LEGACY_UPLOADS_ROOT, pathSegments)
+
+        if (!filePath || !legacyPath) {
+            return NextResponse.json({ error: "Ruta no permitida" }, { status: 403 })
+        }
+
+        const resolved = existsSync(filePath)
+            ? filePath
+            : existsSync(legacyPath)
+              ? legacyPath
+              : null
+
+        if (!resolved) {
+            return NextResponse.json({ error: "Archivo no encontrado" }, { status: 404 })
+        }
+
+        const file = await readFile(resolved)
+
+        return serveFile(file, resolved)
     } catch (error) {
         console.error("Error sirviendo archivo:", error)
         return NextResponse.json(
@@ -60,53 +65,23 @@ export async function GET(
     }
 }
 
-// Función auxiliar para servir el archivo con el content-type correcto
 function serveFile(file: Buffer, filePath: string) {
-    // Determinar el content-type basado en la extensión
     const ext = path.extname(filePath).toLowerCase()
-    const contentType = getContentType(ext)
-    
-    // Configurar headers para caché
+    const contentType = serveContentType(ext)
+
     const headers: HeadersInit = {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable', // Cachear por 1 año
+        // Los archivos son privados: no deben quedar en cachés compartidas.
+        'Cache-Control': 'private, max-age=3600',
+        // Sin esto el navegador puede reinterpretar el contenido y ejecutar como
+        // HTML algo que enviamos como binario.
+        'X-Content-Type-Options': 'nosniff',
+        // Sólo se muestran en el navegador los formatos que no ejecutan código
+        // (nunca SVG ni HTML); el resto se descarga.
+        'Content-Disposition': isInlineSafe(ext)
+            ? `inline; filename="${path.basename(filePath)}"`
+            : `attachment; filename="${path.basename(filePath)}"`,
     }
-    
-    // Para PDFs, agregar header para inline display
-    if (ext === '.pdf') {
-        headers['Content-Disposition'] = 'inline'
-    }
-    
-    // Convertir Buffer a Uint8Array que es compatible con NextResponse
-    const uint8Array = new Uint8Array(file)
-    
-    return new NextResponse(uint8Array, { headers })
-}
 
-// Función para obtener el content-type basado en la extensión
-function getContentType(ext: string): string {
-    const mimeTypes: Record<string, string> = {
-        // Imágenes
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.png': 'image/png',
-        '.gif': 'image/gif',
-        '.webp': 'image/webp',
-        '.svg': 'image/svg+xml',
-        '.ico': 'image/x-icon',
-        
-        // Documentos
-        '.pdf': 'application/pdf',
-        '.doc': 'application/msword',
-        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        '.xls': 'application/vnd.ms-excel',
-        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        
-        // Otros
-        '.txt': 'text/plain',
-        '.json': 'application/json',
-        '.xml': 'application/xml',
-    }
-    
-    return mimeTypes[ext] || 'application/octet-stream'
+    return new NextResponse(new Uint8Array(file), { headers })
 }

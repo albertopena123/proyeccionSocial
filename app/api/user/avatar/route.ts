@@ -4,6 +4,12 @@ import { prisma } from "@/lib/prisma"
 import { writeFile, mkdir, unlink } from "fs/promises"
 import path from "path"
 import { existsSync } from "fs"
+import {
+    IMAGE_MIME_TYPES,
+    UPLOADS_ROOT,
+    sanitizeFileNameSegment,
+    validateUpload,
+} from "@/lib/security/uploads"
 
 // GET - Obtener la imagen del usuario
 export async function GET(request: NextRequest) {
@@ -40,7 +46,7 @@ export async function POST(request: Request) {
 
         const formData = await request.formData()
         const file = formData.get("file") as File | null
-        
+
         if (!file) {
             return NextResponse.json(
                 { error: "No se proporcionó ningún archivo" },
@@ -48,21 +54,11 @@ export async function POST(request: Request) {
             )
         }
 
-        // Validar tipo de archivo
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp']
-        if (!allowedTypes.includes(file.type)) {
-            return NextResponse.json(
-                { error: "Solo se permiten imágenes JPG, JPEG, PNG o WEBP" },
-                { status: 400 }
-            )
-        }
-
-        // Validar tamaño (máximo 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            return NextResponse.json(
-                { error: "La imagen no debe superar los 5MB" },
-                { status: 400 }
-            )
+        // Comprueba tipo, tamaño y firma real del contenido. El Content-Type de un
+        // multipart lo elige el cliente, así que por sí solo no prueba nada.
+        const validation = await validateUpload(file, IMAGE_MIME_TYPES)
+        if (!validation.ok) {
+            return NextResponse.json({ error: validation.error }, { status: 400 })
         }
 
         // Obtener la imagen anterior del usuario
@@ -71,25 +67,18 @@ export async function POST(request: Request) {
             select: { image: true }
         })
 
-        // Generar nombre único para el archivo
-        const bytes = await file.arrayBuffer()
-        const buffer = Buffer.from(bytes)
-        
-        const fileExt = path.extname(file.name)
-        const fileName = `avatar_${session.user.id}_${Date.now()}${fileExt}`
+        // La extensión se deriva del tipo MIME verificado. Tomarla de file.name
+        // permitía guardar un "avatar.svg" con contenido declarado como PNG: al
+        // abrirlo, el SVG ejecuta JavaScript en el origen de la aplicación.
+        const fileName = `avatar_${sanitizeFileNameSegment(session.user.id, "user")}_${Date.now()}${validation.extension}`
         // Guardar fuera de public para servir dinámicamente
-        const uploadDir = path.join(process.cwd(), "uploads", "avatars")
-        
-        // Crear directorio si no existe
-        try {
-            await mkdir(uploadDir, { recursive: true })
-        } catch (error) {
-            console.log("Directory already exists or created")
-        }
-        
+        const uploadDir = path.join(UPLOADS_ROOT, "avatars")
+
+        await mkdir(uploadDir, { recursive: true })
+
         const filePath = path.join(uploadDir, fileName)
-        await writeFile(filePath, buffer)
-        
+        await writeFile(filePath, validation.buffer)
+
         // URL usando la nueva API route
         const fileUrl = `/api/files/avatars/${fileName}`
 
@@ -108,7 +97,7 @@ export async function POST(request: Request) {
         // Eliminar la imagen anterior si existe
         if (currentUser?.image && (currentUser.image.startsWith('/uploads/avatars/') || currentUser.image.startsWith('/api/files/avatars/'))) {
             const oldFileName = path.basename(currentUser.image)
-            const oldFilePath = path.join(process.cwd(), "uploads", "avatars", oldFileName)
+            const oldFilePath = path.join(UPLOADS_ROOT, "avatars", oldFileName)
             
             try {
                 if (existsSync(oldFilePath)) {
@@ -151,7 +140,7 @@ export async function DELETE(request: Request) {
         // Eliminar el archivo si existe
         if (user?.image && (user.image.startsWith('/uploads/avatars/') || user.image.startsWith('/api/files/avatars/'))) {
             const fileName = path.basename(user.image)
-            const filePath = path.join(process.cwd(), "uploads", "avatars", fileName)
+            const filePath = path.join(UPLOADS_ROOT, "avatars", fileName)
             
             try {
                 if (existsSync(filePath)) {

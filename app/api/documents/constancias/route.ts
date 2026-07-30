@@ -1,28 +1,59 @@
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { hasPermission } from "@/lib/services/permissions/permissions.service"
+import { PermissionAction } from "@prisma/client"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
+import {
+    DOCUMENT_MIME_TYPES,
+    UPLOADS_ROOT,
+    sanitizeFileNameSegment,
+    sanitizeOriginalFileName,
+    validateUpload,
+} from "@/lib/security/uploads"
+
+// Se rechazan separadores de ruta y caracteres de control: este valor termina
+// formando parte del nombre del archivo en disco.
+const documentNumber = z
+    .string()
+    .min(1)
+    .max(60)
+    // Lista blanca: cualquier cosa fuera de esto (separadores de ruta incluidos)
+    // se rechaza antes de llegar al nombre del archivo.
+    .regex(/^[A-Za-z0-9 ._#-]+$/, "El numero de documento contiene caracteres no permitidos")
+    .refine((value) => !value.includes(".."), "El numero de documento contiene caracteres no permitidos")
 
 const createConstanciaSchema = z.object({
-    dni: z.string().optional().nullable().transform(val => val === "" ? null : val),
-    studentCode: z.string().min(1),
-    fullName: z.string().min(1),
-    constanciaNumber: z.string().min(1),
-    year: z.string().transform(val => parseInt(val)),
-    observation: z.string().optional().nullable().transform(val => val === "" ? null : val),
+    dni: z.string().max(20).optional().nullable().transform(val => val === "" ? null : val),
+    studentCode: z.string().min(1).max(20),
+    fullName: z.string().min(1).max(200),
+    constanciaNumber: documentNumber,
+    year: z.string().regex(/^\d{4}$/, "Año inválido").transform(val => parseInt(val)),
+    observation: z.string().max(2000).optional().nullable().transform(val => val === "" ? null : val),
 })
 
 // GET /api/documents/constancias - Obtener todas las constancias
 export async function GET() {
     try {
         const session = await auth()
-        
+
         if (!session) {
             return NextResponse.json(
                 { error: "No autorizado" },
                 { status: 401 }
+            )
+        }
+
+        // Las constancias contienen datos personales (nombre, DNI, código). Antes
+        // bastaba con tener sesión, así que cualquier estudiante recién registrado
+        // podía volcar el listado completo.
+        const canRead = await hasPermission(session.user.id, "constancias.access", PermissionAction.READ)
+        if (!canRead) {
+            return NextResponse.json(
+                { error: "Sin permisos para ver constancias" },
+                { status: 403 }
             )
         }
 
@@ -62,7 +93,7 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const session = await auth()
-        
+
         if (!session) {
             return NextResponse.json(
                 { error: "No autorizado" },
@@ -70,8 +101,16 @@ export async function POST(request: Request) {
             )
         }
 
+        const canCreate = await hasPermission(session.user.id, "constancias.access", PermissionAction.CREATE)
+        if (!canCreate) {
+            return NextResponse.json(
+                { error: "Sin permisos para crear constancias" },
+                { status: 403 }
+            )
+        }
+
         const formData = await request.formData()
-        
+
         // Extraer datos del FormData
         const rawData = {
             studentCode: formData.get("studentCode") as string,
@@ -81,7 +120,7 @@ export async function POST(request: Request) {
             year: formData.get("year") as string,
             observation: formData.get("observation") as string | null,
         }
-        
+
         // Validar datos
         const validatedData = createConstanciaSchema.parse(rawData)
 
@@ -102,45 +141,26 @@ export async function POST(request: Request) {
         // Procesar archivo si existe
         let fileData = {}
         const file = formData.get("file") as File | null
-        
-        if (file) {
-            // Validar tipo de archivo
-            const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
-            if (!allowedTypes.includes(file.type)) {
-                return NextResponse.json(
-                    { error: "Tipo de archivo no permitido" },
-                    { status: 400 }
-                )
+
+        if (file && file.size > 0) {
+            const validation = await validateUpload(file, DOCUMENT_MIME_TYPES)
+            if (!validation.ok) {
+                return NextResponse.json({ error: validation.error }, { status: 400 })
             }
 
-            // Validar tamaño (máximo 5MB)
-            if (file.size > 5 * 1024 * 1024) {
-                return NextResponse.json(
-                    { error: "El archivo supera el tamaño máximo de 5MB" },
-                    { status: 400 }
-                )
-            }
+            // El nombre se construye con el número saneado y la extensión derivada
+            // del tipo MIME verificado. Tomarlos del cliente permitía escribir
+            // fuera de la carpeta (constanciaNumber con "../") y dejar en el
+            // servidor archivos con extensiones ejecutables en el navegador.
+            const safeNumber = sanitizeFileNameSegment(validatedData.constanciaNumber, "constancia")
+            const fileName = `${safeNumber}_${Date.now()}${validation.extension}`
+            const uploadDir = path.join(UPLOADS_ROOT, "constancias")
 
-            // Generar nombre único para el archivo
-            const bytes = await file.arrayBuffer()
-            const buffer = Buffer.from(bytes)
-            
-            const fileExt = path.extname(file.name)
-            const fileName = `${validatedData.constanciaNumber}_${Date.now()}${fileExt}`
-            const uploadDir = path.join(process.cwd(), "public", "uploads", "constancias")
-            
-            // Crear directorio si no existe
-            try {
-                await mkdir(uploadDir, { recursive: true })
-            } catch (error) {
-                console.log("Directory already exists or created")
-            }
-            
-            const filePath = path.join(uploadDir, fileName)
-            await writeFile(filePath, buffer)
-            
+            await mkdir(uploadDir, { recursive: true })
+            await writeFile(path.join(uploadDir, fileName), validation.buffer)
+
             fileData = {
-                fileName: file.name,
+                fileName: sanitizeOriginalFileName(file.name, validation.extension),
                 fileUrl: `/api/documents/files/constancias/${fileName}`,
                 fileSize: file.size,
                 fileMimeType: file.type

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/security/rate-limit"
 
 // Bearer token para la API de UNAMAD desde variable de entorno
 const UNAMAD_API_TOKEN = process.env.UNAMAD_API_TOKEN || ""
@@ -48,9 +49,17 @@ export async function GET(
       )
     }
 
+    // El formulario de registro es público y no puede exigir sesión, pero sin
+    // límite esta ruta permite enumerar códigos y extraer los datos académicos de
+    // toda la universidad. Un alta legítima necesita una o dos consultas.
+    const limit = rateLimit(`student-by-code:${clientIp(request)}`, 10, 10 * 60_000)
+    if (!limit.allowed) {
+      return rateLimitResponse(limit, "Demasiadas consultas. Intenta de nuevo más tarde.")
+    }
+
     // Llamar a la API externa con autenticación (timeout 10s)
     const response = await fetch(
-      `https://daa-documentos.unamad.edu.pe:8081/api/getStudentInfo/${code}`,
+      `https://daa-documentos.unamad.edu.pe:8081/api/getStudentInfo/${encodeURIComponent(code)}`,
       {
         method: 'GET',
         headers: {

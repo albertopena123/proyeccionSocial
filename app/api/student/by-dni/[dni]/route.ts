@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/security/rate-limit"
 
 // Bearer token para la API de UNAMAD desde variable de entorno
 const UNAMAD_API_TOKEN = process.env.UNAMAD_API_TOKEN || ""
@@ -18,9 +19,18 @@ export async function GET(
       )
     }
 
+    // El formulario de registro es público, así que esta consulta no puede exigir
+    // sesión: devuelve nombre, correos y carrera a partir de un DNI, y sin límite
+    // permite recorrer los 100 millones de DNIs posibles y reconstruir el padrón.
+    // Un alta legítima necesita una o dos consultas.
+    const limit = rateLimit(`student-by-dni:${clientIp(request)}`, 10, 10 * 60_000)
+    if (!limit.allowed) {
+      return rateLimitResponse(limit, "Demasiadas consultas. Intenta de nuevo más tarde.")
+    }
+
     // Llamar a la API externa con autenticación (timeout 10s)
     const response = await fetch(
-      `https://daa-documentos.unamad.edu.pe:8081/api/data/student/${dni}`,
+      `https://daa-documentos.unamad.edu.pe:8081/api/data/student/${encodeURIComponent(dni)}`,
       {
         method: 'GET',
         headers: {

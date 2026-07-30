@@ -7,6 +7,7 @@ import { z } from "zod"
 import { UserRole, PermissionAction } from "@prisma/client"
 import crypto from "crypto"
 import { sendVerificationEmail } from "@/lib/email"
+import { actorRole, canGrantRole } from "@/lib/security/authz"
 
 const createUserSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -89,6 +90,15 @@ export async function GET() {
     }
 
     const users = await prisma.user.findMany({
+      // Sin omit, este listado devolvía el hash de contraseña y los tokens de
+      // verificación y de recuperación de cada usuario: con ellos se puede
+      // secuestrar cualquier cuenta sin conocer su contraseña.
+      omit: {
+        password: true,
+        verificationToken: true,
+        resetPasswordToken: true,
+        resetPasswordExpires: true,
+      },
       include: {
         permissions: {
           include: {
@@ -130,6 +140,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = createUserSchema.parse(body)
 
+    // El permiso users.access sólo dice "puede crear usuarios", no "puede crear
+    // administradores". Sin esta comprobación, cualquiera con ese permiso se
+    // fabricaba una cuenta SUPER_ADMIN y escalaba a control total.
+    const currentRole = await actorRole(session.user.id)
+    if (!currentRole || !canGrantRole(currentRole, validatedData.role)) {
+      return NextResponse.json(
+        { error: "No puedes crear un usuario con un rol igual o superior al tuyo" },
+        { status: 403 }
+      )
+    }
+
     // Verificar si el email ya existe
     const existingUser = await prisma.user.findUnique({
       where: { email: validatedData.email.toLowerCase() }
@@ -147,6 +168,13 @@ export async function POST(request: NextRequest) {
 
     // Crear usuario (inactivo hasta que verifique su email)
     const newUser = await prisma.user.create({
+      // La respuesta se devuelve al cliente: nunca debe llevar el hash ni el token.
+      omit: {
+        password: true,
+        verificationToken: true,
+        resetPasswordToken: true,
+        resetPasswordExpires: true,
+      },
       data: {
         email: validatedData.email.toLowerCase(),
         password: hashedPassword,

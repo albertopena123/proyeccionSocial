@@ -7,6 +7,7 @@ import { prisma } from "./prisma"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 import { UserRole, PermissionAction } from "@prisma/client"
+import { clientIp, rateLimit, resetRateLimit } from "./security/rate-limit"
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -69,7 +70,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         try {
           const validatedFields = loginSchema.safeParse(credentials)
           
@@ -78,7 +79,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
           
           const { email, password } = validatedFields.data
-          
+
+          // Sin límite, la contraseña de cualquier cuenta conocida se puede probar
+          // a la velocidad que aguante el servidor. Se cuenta por cuenta y por IP:
+          // lo primero frena el ataque dirigido, lo segundo el barrido de correos
+          // institucionales, que son predecibles.
+          const ip = clientIp(request)
+          const accountKey = `login:account:${email.toLowerCase()}`
+          const ipKey = `login:ip:${ip}`
+
+          const accountLimit = rateLimit(accountKey, 10, 15 * 60_000)
+          const ipLimit = rateLimit(ipKey, 30, 15 * 60_000)
+
+          if (!accountLimit.allowed || !ipLimit.allowed) {
+            throw new Error("Demasiados intentos de inicio de sesión. Espera unos minutos e inténtalo de nuevo.")
+          }
+
           const user = await prisma.user.findUnique({
             where: { email: email.toLowerCase() }
           })
@@ -97,6 +113,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!passwordsMatch) {
             return null
           }
+
+          // Un inicio de sesión correcto libera el contador de la cuenta para que
+          // un tercero no pueda dejar a nadie fuera agotando sus intentos.
+          resetRateLimit(accountKey)
           
           return {
             id: user.id,
@@ -125,14 +145,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         try {
           const dbUser = await prisma.user.findUnique({
             where: { email: token.email as string },
-            select: { id: true, role: true, image: true }
+            select: { id: true, role: true, image: true, isActive: true }
           })
-          
-          if (dbUser) {
-            token.id = dbUser.id
-            token.role = dbUser.role || "USER"
-            token.image = dbUser.image
+
+          // La sesión es un JWT de 30 días y no se consultaba isActive, así que
+          // desactivar o borrar una cuenta comprometida no cortaba su acceso: el
+          // token seguía siendo válido casi un mes. Devolver null invalida la
+          // sesión en la siguiente petición.
+          if (!dbUser || !dbUser.isActive) {
+            return null
           }
+
+          token.id = dbUser.id
+          token.role = dbUser.role || "USER"
+          token.image = dbUser.image
         } catch (error) {
           console.error("Error obteniendo usuario en JWT callback:", error)
         }
