@@ -1,5 +1,3 @@
-// next.config.js
-
 import type { NextConfig } from "next";
 
 // Content-Security-Policy.
@@ -49,19 +47,13 @@ const nextConfig: NextConfig = {
 
   images: {
     remotePatterns: [
+      // Solo para avatares heredados: el login con Google se eliminó, pero los
+      // usuarios que entraron con él antes conservan una URL de foto en este
+      // dominio guardada en User.image, y next/image la rechazaría sin esto.
+      // Comprobar que ninguna fila la use antes de quitar este patrón.
       {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'via.placeholder.com',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
         pathname: '/**',
       },
     ],

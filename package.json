@@ -57,6 +57,7 @@
     "csv-parser": "^3.2.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
+    "gsap": "^3.15.0",
     "lucide-react": "^0.536.0",
     "next": "15.4.5",
     "next-auth": "^5.0.0-beta.29",

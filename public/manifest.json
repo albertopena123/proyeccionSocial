@@ -5,7 +5,7 @@
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "theme_color": "#1e5f3e",
+  "theme_color": "#db0455",
   "background_color": "#ffffff",
   "scope": "/",
   "lang": "es-PE",
@@ -75,10 +75,10 @@
   ],
   "shortcuts": [
     {
-      "name": "Proyectos Activos",
-      "short_name": "Proyectos",
-      "description": "Ver proyectos de proyección social activos",
-      "url": "/proyectos",
+      "name": "Consultar documentos",
+      "short_name": "Consultar",
+      "description": "Buscar constancias y resoluciones",
+      "url": "/consulta-documentos",
       "icons": [
         {
           "src": "/banner/icon.png",
@@ -88,10 +88,10 @@
       ]
     },
     {
-      "name": "Voluntariado",
-      "short_name": "Voluntariado",
-      "description": "Únete como voluntario",
-      "url": "/voluntariado",
+      "name": "Iniciar sesión",
+      "short_name": "Acceder",
+      "description": "Entrar al sistema de Proyección Social",
+      "url": "/login",
       "icons": [
         {
           "src": "/banner/icon.png",
@@ -99,33 +99,6 @@
           "type": "image/png"
         }
       ]
-    },
-    {
-      "name": "Contacto",
-      "short_name": "Contacto",
-      "description": "Contáctanos",
-      "url": "/contacto",
-      "icons": [
-        {
-          "src": "/banner/icon.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshots/home.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "label": "Página principal"
-    },
-    {
-      "src": "/screenshots/proyectos.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "label": "Proyectos sociales"
     }
   ],
   "related_applications": [],

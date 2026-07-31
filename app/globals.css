@@ -6,8 +6,13 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Ojo: esto apuntaba a --font-geist-sans, una variable de la plantilla de Next
+     que nadie definía nunca. Resultado: font-sans no resolvía, toda la web se
+     pintaba con la fuente del sistema, e Inter y Plus Jakarta se descargaban
+     para nada (quedaban en "unloaded"). Si cambias el nombre de la variable en
+     layout.tsx, cámbialo también aquí o vuelve a pasar sin avisar. */
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-parkinsans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -21,6 +26,18 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-subtle-foreground: var(--brand-subtle-foreground);
+  --color-brand-ring: var(--brand-ring);
+  --color-elenco-canto: var(--elenco-canto);
+  --color-elenco-teatro: var(--elenco-teatro);
+  --color-elenco-danzas: var(--elenco-danzas);
+  --color-elenco-baile: var(--elenco-baile);
+  --color-elenco-plasticas: var(--elenco-plasticas);
+  --color-elenco-tuna: var(--elenco-tuna);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-ring: var(--ring);
@@ -70,6 +87,40 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
+
+  /* Color institucional UNAMAD: #db0455 = oklch(0.570 0.226 11.2). 5.05:1 sobre
+     blanco (AA). La croma de cada variante está pegada al borde del gamut sRGB
+     para este tono (en L=0.86 el máximo es 0.077): subirla la recorta el navegador
+     y el tono se desvía. Ver validación de contraste antes de tocar estos valores. */
+  --brand: oklch(0.570 0.226 11.2);
+  --brand-foreground: oklch(0.985 0 0);
+  --brand-hover: oklch(0.500 0.196 11.2);
+  --brand-subtle: oklch(0.960 0.020 11.2);
+  --brand-subtle-foreground: oklch(0.450 0.176 11.2);
+  --brand-ring: oklch(0.570 0.226 11.2);
+
+  /* Un color por elenco: identidad de contenido, no del sitio (el cromo sigue
+     siendo la marca). Ordenados como espectro —amarillo, naranja, rojo, magenta,
+     morado, azul— para que la barra de la portada lea como degradado.
+
+     Cada tono va a SU luminosidad natural: forzarlos todos a L~0.55 para que
+     valiera el texto blanco convertía el amarillo en oliva y el naranja en
+     marrón. El texto se elige por color (-fg), no al revés. Todos validados:
+     en gamut sRGB y >=4.5:1 contra su propio -fg. `danzas` lleva L=0.61 y no
+     0.60 porque a 0.60 caía en la zona muerta donde ni blanco ni negro llegan. */
+  --elenco-canto: oklch(0.87 0.172 95);
+  --elenco-canto-fg: oklch(0.16 0 0);
+  --elenco-teatro: oklch(0.72 0.171 55);
+  --elenco-teatro-fg: oklch(0.16 0 0);
+  --elenco-danzas: oklch(0.61 0.23 25);
+  --elenco-danzas-fg: oklch(0.16 0 0);
+  --elenco-baile: oklch(0.57 0.219 11.2);
+  --elenco-baile-fg: oklch(0.985 0 0);
+  --elenco-plasticas: oklch(0.52 0.23 310);
+  --elenco-plasticas-fg: oklch(0.985 0 0);
+  --elenco-tuna: oklch(0.62 0.126 235);
+  --elenco-tuna-fg: oklch(0.16 0 0);
+
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -104,6 +155,16 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
+
+  /* El #db0455 directo sobre fondo oscuro se queda en 2.5:1, así que aquí el
+     institucional se aclara a L=0.70. En oscuro el hover aclara en vez de oscurecer. */
+  --brand: oklch(0.700 0.193 11.2);
+  --brand-foreground: oklch(0.180 0.040 11.2);
+  --brand-hover: oklch(0.760 0.143 11.2);
+  --brand-subtle: oklch(0.280 0.060 11.2);
+  --brand-subtle-foreground: oklch(0.860 0.075 11.2);
+  --brand-ring: oklch(0.700 0.193 11.2);
+
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -114,6 +175,58 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
+/* Intro de la portada. Va en CSS y no en JS a propósito: con fill-mode forwards
+   la cortina se retira sola aunque el JS no llegue a ejecutarse, y quien pide
+   menos movimiento no la ve nunca sin que haga falta código.
+   Los tiempos y la curva salen de medir la referencia fotograma a fotograma;
+   están documentados en lib/intro.ts. No los toques sin volver a medir. */
+
+/* Sin pausa dentro de la keyframe: la espera es el animation-delay. Si el hold
+   va aquí dentro, el easing se reparte entre pausa y movimiento y la columna
+   arranca reptando. */
+@keyframes intro-column-out {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-101%);
+  }
+}
+
+@keyframes intro-mark-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  35%,
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes intro-veil-out {
+  0%,
+  99% {
+    visibility: visible;
+  }
+  100% {
+    visibility: hidden;
+  }
+}
+
+/* ?nointro (solo para desarrollo). La clase la pone el script bloqueante del
+   <head> (ver INTRO_SCRIPT en lib/intro.ts), así que esto se aplica antes del
+   primer pintado y no llega a verse ni un fotograma de la cortina.
+   display:none y no visibility: hay que sacarla del flujo, no solo ocultarla. */
+.intro-skip [data-intro-veil] {
+  display: none;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -121,5 +234,16 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* scroll-behavior no consulta esto por su cuenta: hay que desactivarlo a mano. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
   }
 }

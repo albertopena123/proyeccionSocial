@@ -51,3 +51,8 @@ next-env.d.ts
 
 # logs de pm2
 logs/
+
+# Pósters de elencos en tamaño original (~2.5MB cada uno). Lo que sirve la web
+# son los WebP de public/images/elencos/, generados con scripts/convert-elencos.js.
+/assets/elencos-originales/
+/assets/responsabilidad-originales/

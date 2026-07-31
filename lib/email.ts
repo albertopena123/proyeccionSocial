@@ -26,9 +26,13 @@ interface SendEmailOptions {
   subject: string
   html: string
   text?: string
+  // Opcional: a quién responde el destinatario al pulsar "Responder". El
+  // formulario de contacto lo usa para que la DPSEU conteste directo al
+  // visitante, aunque el "from" siga siendo la cuenta institucional.
+  replyTo?: string
 }
 
-export async function sendEmail({ to, subject, html, text }: SendEmailOptions) {
+export async function sendEmail({ to, subject, html, text, replyTo }: SendEmailOptions) {
   try {
     const info = await transporter.sendMail({
       from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_FROM_ADDRESS}>`,
@@ -36,6 +40,7 @@ export async function sendEmail({ to, subject, html, text }: SendEmailOptions) {
       subject,
       text: text || '',
       html,
+      ...(replyTo ? { replyTo } : {}),
     })
 
     console.log('Email enviado exitosamente:', info.messageId)

@@ -1,21 +1,36 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { Inter, Parkinsans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { siteConfig } from "@/lib/site-config";
+import { INTRO_SCRIPT } from "@/lib/intro";
 
-// Fuentes optimizadas para mejor legibilidad
+/**
+ * Dos familias y no más: Inter para todo el texto e interfaz, Parkinsans para
+ * los titulares. Parkinsans es la misma que usa la referencia en sus display
+ * (geométrica y algo redondeada); su fuente de texto, Author, es de pago, e Inter
+ * es la equivalente libre con mejor legibilidad y buenos acentos castellanos.
+ *
+ * subsets latin-ext porque "Amazónica", "Folklóricas" o "¿" no entran en latin.
+ */
 const inter = Inter({
   variable: "--font-inter",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   display: 'swap',
 });
 
-const plusJakarta = Plus_Jakarta_Sans({
-  variable: "--font-plus-jakarta",
-  subsets: ["latin"],
-  weight: ['300', '400', '500', '600', '700', '800'],
+const parkinsans = Parkinsans({
+  variable: "--font-parkinsans",
+  subsets: ["latin", "latin-ext"],
   display: 'swap',
+  // Next no tiene las métricas de Parkinsans (es de 2024, no está en su base de
+  // datos) y avisaba "Failed to find font override values" en cada build limpio.
+  // Desactivarlo no empeora nada: sin métricas no podía generar la reserva
+  // ajustada de todas formas. El coste es un pequeño salto en los titulares al
+  // cargar la fuente; solo afecta a titulares, no al texto (que es Inter y sí
+  // tiene métricas).
+  adjustFontFallback: false,
 });
 
 // Configuración de Viewport (separado de metadata en Next.js 14)
@@ -136,7 +151,7 @@ export const metadata: Metadata = {
       {
         rel: 'mask-icon',
         url: '/banner/icon.png',
-        color: '#1e5f3e', // Verde institucional UNAMAD
+        color: '#db0455', // Color institucional UNAMAD
       },
     ],
   },
@@ -144,42 +159,37 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
 };
 
-// Datos estructurados para SEO (Schema.org)
+// Datos estructurados para SEO (Schema.org). Mismos datos que muestra el footer:
+// ambos salen de lib/site-config para que no se contradigan.
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'EducationalOrganization',
-  name: 'Dirección de Proyección Social y Extensión Universitaria - UNAMAD',
+  name: `${siteConfig.fullName} - UNAMAD`,
   alternateName: 'DPSEU UNAMAD',
-  url: 'https://proyeccionsocial.unamad.edu.pe',
-  logo: 'https://proyeccionsocial.unamad.edu.pe/banner/icon.png',
+  url: siteConfig.url,
+  logo: `${siteConfig.url}/banner/icon.png`,
   description: 'Dirección encargada de promover la responsabilidad social universitaria y la extensión cultural en la Universidad Nacional Amazónica de Madre de Dios',
   address: {
     '@type': 'PostalAddress',
-    streetAddress: 'Av. Jorge Chávez 1160',
-    addressLocality: 'Puerto Maldonado',
-    addressRegion: 'Madre de Dios',
-    postalCode: '17001',
-    addressCountry: 'PE'
+    streetAddress: siteConfig.contact.streetAddress,
+    addressLocality: siteConfig.contact.locality,
+    addressRegion: siteConfig.contact.region,
+    postalCode: siteConfig.contact.postalCode,
+    addressCountry: siteConfig.contact.country,
   },
   contactPoint: {
     '@type': 'ContactPoint',
     contactType: 'Atención al público',
-    telephone: '+51-82-571199',
-    email: 'proyeccionsocial@unamad.edu.pe',
+    telephone: siteConfig.contact.phone,
+    email: siteConfig.contact.email,
     availableLanguage: ['Español'],
     areaServed: 'PE',
   },
-  sameAs: [
-    'https://www.facebook.com/UNAMAD.oficial',
-    'https://twitter.com/UNAMAD_oficial',
-    'https://www.instagram.com/unamad.oficial',
-    'https://www.youtube.com/@UNAMAD',
-    'https://www.linkedin.com/school/unamad'
-  ],
+  sameAs: Object.values(siteConfig.social),
   parentOrganization: {
     '@type': 'CollegeOrUniversity',
-    name: 'Universidad Nacional Amazónica de Madre de Dios',
-    url: 'https://www.unamad.edu.pe'
+    name: siteConfig.university,
+    url: siteConfig.universityUrl,
   }
 };
 
@@ -189,8 +199,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es-PE" suppressHydrationWarning>
+    <html
+      lang="es-PE"
+      // Las variables de fuente van en <html> y no en <body>: así las ve
+      // cualquier cosa que se renderice fuera del body (portales, overlays).
+      className={`${inter.variable} ${parkinsans.variable}`}
+      suppressHydrationWarning
+    >
       <head>
+        {/* Decide si la intro de la portada suena, ANTES del primer pintado.
+            Tiene que ir aquí y ser bloqueante: si se decidiera al hidratar, en
+            cada recarga se vería un fogonazo de la cortina antes de quitarla. */}
+        <script dangerouslySetInnerHTML={{ __html: INTRO_SCRIPT }} />
+
         {/* Favicon principal */}
         <link rel="icon" type="image/png" href="/banner/icon.png" />
         <link rel="shortcut icon" type="image/png" href="/banner/icon.png" />
@@ -224,7 +245,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
       </head>
       <body
-        className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased min-h-screen bg-background`}
+        className="font-sans antialiased min-h-screen bg-background"
       >
         <ThemeProvider
           attribute="class"

@@ -27,7 +27,10 @@
       "Bash(npm run clean-restart:*)",
       "Bash(node:*)",
       "Bash(npx kill-port:*)",
-      "Bash(PORT=3001 npm run *)"
+      "Bash(PORT=3001 npm run *)",
+      "PowerShell(npx prisma generate)",
+      "Bash(npx --yes kill-port 3000)",
+      "PowerShell(Get-NetTCPConnection *)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
