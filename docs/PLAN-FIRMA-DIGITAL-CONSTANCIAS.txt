@@ -1,0 +1,675 @@
+================================================================================
+ PLAN DE IMPLEMENTACION: FIRMA DIGITAL EN EL MODULO DE CONSTANCIAS
+ Sistema de Proyeccion Social - UNAMAD
+ Fecha: 11/08/2026
+================================================================================
+
+Este documento describe (1) como esta hoy el modulo de constancias, (2) que
+significa realmente "firma digital" y que nivel conviene implementar, (3) el
+plan tecnico por fases con archivos y modelos concretos, y (4) otras mejoras
+del sistema que conviene atacar en paralelo.
+
+Todas las rutas de archivo citadas son reales y fueron verificadas en el
+repositorio.
+
+
+================================================================================
+1. DIAGNOSTICO: COMO FUNCIONA HOY EL MODULO
+================================================================================
+
+1.1 HALLAZGO CENTRAL
+--------------------
+El sistema NO genera constancias. No hay ninguna libreria de PDF instalada
+(no hay jspdf, pdf-lib, puppeteer, @react-pdf/renderer, docx, pdfkit) y no
+existe ninguna plantilla de documento. El unico HTML de plantilla del proyecto
+es el de correos, en lib/email-templates.ts.
+
+Lo que el modulo hace hoy es CUSTODIA Y REGISTRO: alguien emite la constancia
+por fuera (Word/impresa/firmada a mano), la escanea, y el sistema la sube,
+la indexa, la aprueba y la expone a consulta publica.
+
+Consecuencia importante para este plan: implementar firma digital obliga
+primero a implementar GENERACION del documento. No se puede firmar
+digitalmente de forma util un PDF escaneado del que el sistema no controla
+el contenido.
+
+1.2 MODELO DE DATOS ACTUAL
+--------------------------
+prisma/schema.prisma:373-416  -> model Constancia
+
+    id, studentCode, fullName, dni?
+    constanciaNumber (unico), year, observation?
+    fileName?, fileUrl?, fileSize?, fileMimeType?     <- UN solo archivo embebido
+    status  DocumentStatus @default(PENDIENTE)
+    type    DocumentType   @default(CONSTANCIA)
+    createdById / createdBy, approvedById? / approvedBy?
+    createdAt, updatedAt, approvedAt?
+
+prisma/schema.prisma:334-339  -> enum DocumentStatus
+    PENDIENTE | APROBADO | RECHAZADO | ANULADO
+    (ANULADO esta declarado pero NUNCA se usa en ningun endpoint)
+
+prisma/schema.prisma:299-314  -> model AuditLog
+    userId?, action, entity, entityId, changes Json?, metadata Json?, timestamp
+
+Comparacion: model Resolucion (prisma/schema.prisma:455-517) es mucho mas
+rico y si soporta multiples archivos via ArchivoResolucion (L556-570).
+Constancia no. Esto es una limitacion a resolver (ver seccion 3.2).
+
+1.3 RUTAS EXISTENTES
+--------------------
+PAGINAS
+  app/(protected)/documents/constancias/page.tsx     listado, calcula permisos
+  app/(protected)/documents/constancias/actions.ts   getConstancias()
+  app/consulta-documentos/page.tsx                   buscador PUBLICO (182 lineas)
+
+API
+  app/api/documents/constancias/route.ts             GET lista / POST crea+sube
+  app/api/documents/constancias/[id]/route.ts        GET / PATCH / DELETE
+  app/api/documents/constancias/[id]/approve/route.ts  PENDIENTE -> APROBADO
+  app/api/documents/constancias/[id]/reject/route.ts   PENDIENTE -> RECHAZADO
+  app/api/documents/files/[...path]/route.ts         sirve archivos con autorizacion
+  app/api/public/documentos/buscar/route.ts          buscador publico, rate-limited
+
+COMPONENTES
+  components/documents/constancias-page-client.tsx
+  components/documents/constancias-data-table.tsx
+  components/documents/create-constancia-dialog.tsx
+  components/documents/edit-constancia-dialog.tsx
+  components/documents/view-constancia-dialog.tsx
+
+1.4 LO QUE YA ESTA BIEN HECHO (reutilizar, no reinventar)
+---------------------------------------------------------
+lib/security/uploads.ts (151 lineas) es solido y hay que apoyarse en el:
+
+  - UPLOADS_ROOT = process.cwd()/uploads          <- fuera de /public, correcto
+  - MAX_UPLOAD_BYTES = 5MB
+  - DOCUMENT_MIME_TYPES = pdf, jpeg, jpg, png
+  - validateUpload(): MIME allowlist -> tamano -> extension derivada del MIME
+    (nunca del nombre del cliente) -> verificacion de MAGIC BYTES
+  - sanitizeFileNameSegment() / sanitizeOriginalFileName() anti path traversal
+  - resolveWithinRoot() contra %2e%2e en rutas catch-all
+  - serveContentType() / isInlineSafe() allowlist de Content-Type de salida
+
+Patron de escritura establecido (app/api/documents/constancias/route.ts:145-167):
+  UPLOADS_ROOT/constancias/{safeNumber}_{Date.now()}{ext}
+  fileUrl = /api/documents/files/constancias/{fileName}
+
+Gate de publicidad (app/api/documents/files/[...path]/route.ts:27-51):
+  belongsToApprovedDocument() -> un archivo es publico SOLO si pertenece a una
+  Constancia/Resolucion en estado APROBADO. Si no, exige sesion + permiso.
+  ATENCION: compara por coincidencia EXACTA de fileUrl contra la BD. Cualquier
+  PDF que se genere debe quedar guardado en Constancia.fileUrl (o en un modelo
+  nuevo que se agregue a esa consulta) o no sera servible.
+
+1.5 LO QUE NO EXISTE HOY
+------------------------
+  - Generacion de PDF                    : NO
+  - Plantillas de documento              : NO
+  - Codigo QR                            : NO (cero ocurrencias de qr/qrcode)
+  - Hash de contenido / integridad       : NO (no hay createHash, sha256)
+  - Firma digital / PAdES / XAdES        : NO
+  - Codigo de verificacion publico       : NO (solo se puede buscar por texto)
+  - Boton "Exportar"                     : EXISTE PERO NO HACE NADA
+      components/documents/constancias-page-client.tsx:69-77 -> Button sin onClick
+      El permiso PermissionAction.EXPORT se calcula y se propaga a la UI pero
+      no habilita ninguna funcionalidad. Es el gancho natural para colgar la
+      generacion sin tocar el sistema de permisos.
+
+
+================================================================================
+2. QUE ES "FIRMA DIGITAL" Y QUE NIVEL IMPLEMENTAR
+================================================================================
+
+Hay que distinguir tres niveles. Se confunden habitualmente y tienen costos y
+validez legal MUY distintos.
+
+NIVEL A - FIRMA ELECTRONICA SIMPLE + VERIFICACION EN LINEA
+----------------------------------------------------------
+Que es: el PDF lleva la imagen de la firma del funcionario, un sello, un
+codigo de verificacion unico y un QR. Quien recibe el documento escanea el QR,
+llega a una pagina publica de la UNAMAD y ve los datos reales del sistema.
+La confianza NO viene del archivo, viene de que la web oficial lo confirma.
+
+  Ventajas : se implementa en dias, cero costo externo, cero dependencia de
+             terceros, cubre el 90% del caso de uso real (que un tercero pueda
+             comprobar que la constancia no es falsa).
+  Limites  : no tiene valor probatorio pleno de firma digital ante ley; si
+             alguien altera el PDF, el archivo alterado no se "rompe" solo
+             (pero el QR delata la diferencia contra el original).
+
+NIVEL B - FIRMA DIGITAL CRIPTOGRAFICA (PAdES) CON CERTIFICADO INSTITUCIONAL
+---------------------------------------------------------------------------
+Que es: el PDF se firma con un certificado X.509. Adobe Reader y cualquier
+validador muestran "documento firmado, integro". Cualquier modificacion de un
+solo byte invalida la firma matematicamente.
+
+  Ventajas : integridad y autenticidad reales y verificables offline.
+  Limites  : requiere gestionar un certificado y su clave privada, con todo lo
+             que eso implica (HSM o al menos almacenamiento cifrado, rotacion,
+             revocacion). Si el certificado es autofirmado, Adobe lo mostrara
+             como "no confiable" salvo que se instale la CA de la UNAMAD.
+
+NIVEL C - FIRMA DIGITAL CON VALOR LEGAL PLENO (IOFE)
+-----------------------------------------------------
+En Peru la firma digital con valor legal equivalente a la manuscrita esta
+regulada por la Ley 27269 (Ley de Firmas y Certificados Digitales) y su
+reglamento, dentro de la Infraestructura Oficial de Firma Electronica (IOFE).
+Exige certificados emitidos por entidades de certificacion ACREDITADAS ante
+INDECOPI, y normalmente token criptografico fisico por firmante o un servicio
+de firma en la nube acreditado.
+
+  Ventajas : validez legal plena.
+  Limites  : costo por certificado y por firmante, tramite administrativo,
+             y el software debe integrarse con el proveedor.
+
+  >> NOTA: antes de comprometer esta fase, VERIFICAR con la oficina legal /
+     Secretaria General de la UNAMAD el marco vigente y si la universidad ya
+     tiene un convenio o certificados adquiridos. La normativa y la lista de
+     entidades acreditadas cambian; no dar por cierto lo que dice este parrafo
+     sin confirmarlo con la fuente oficial (INDECOPI / PCM).
+
+RECOMENDACION
+-------------
+Implementar A y B, en ese orden, y dejar C como fase condicionada a decision
+institucional.
+
+  Fase 1 (Nivel A) : generacion del PDF + QR + hash + pagina publica de
+                     verificacion. Es lo que da valor inmediato.
+  Fase 2 (Nivel B) : firmar con pdf-lib + certificado institucional, sobre la
+                     misma tuberia de generacion ya construida.
+  Fase 3 (Nivel C) : solo si la universidad decide adquirir certificados IOFE.
+                     La arquitectura de la Fase 2 debe dejar el "firmador"
+                     detras de una interfaz para poder cambiar el proveedor.
+
+Razon del orden: la Fase 1 es la que resuelve el problema practico (falsificacion
+de constancias presentadas a terceros) y no depende de nadie externo. La Fase 2
+sin la Fase 1 es un PDF criptograficamente perfecto que nadie sabe validar.
+
+
+================================================================================
+3. FASE 1 - GENERACION + QR + VERIFICACION PUBLICA
+================================================================================
+
+3.1 DEPENDENCIAS A INSTALAR
+---------------------------
+    npm install pdf-lib qrcode @pdf-lib/fontkit
+    npm install -D @types/qrcode
+
+  pdf-lib      : generacion y manipulacion de PDF en Node puro. Funciona en el
+                 runtime Node de Next 15. NO usar puppeteer: el deploy es PM2
+                 sobre Windows/Apache (ver ecosystem.config.js, start-app.cmd)
+                 y arrastrar un Chromium ahi es una fuente de problemas.
+  qrcode       : genera el QR como PNG en buffer, para incrustarlo en el PDF.
+  @pdf-lib/fontkit : necesario si se usa una tipografia propia con tildes y n.
+
+3.2 CAMBIOS EN prisma/schema.prisma
+-----------------------------------
+Agregar al model Constancia (prisma/schema.prisma:373-416):
+
+    // --- Verificacion publica ---
+    verificationCode  String?   @unique   // codigo corto legible, ej "CS-2026-A7K4M2"
+    contentHash       String?             // SHA-256 del PDF generado, hex
+    generatedAt       DateTime?           // cuando se genero el PDF oficial
+
+    // --- Firma (se llena en Fase 2) ---
+    signedAt          DateTime?
+    signedById        String?
+    signedBy          User?     @relation("ConstanciasFirmadas", fields: [signedById], references: [id])
+    signatureType     SignatureType?
+    signatureMeta     Json?               // emisor del cert, serie, algoritmo, sello de tiempo
+
+    // --- Anulacion (hoy ANULADO existe pero no se usa) ---
+    revokedAt         DateTime?
+    revokedById       String?
+    revokedReason     String?   @db.Text
+
+    @@index([verificationCode])
+
+Nuevo enum:
+
+    enum SignatureType {
+      NINGUNA        // documento generado sin firma criptografica (Fase 1)
+      INSTITUCIONAL  // certificado propio de la UNAMAD (Fase 2)
+      IOFE           // certificado acreditado (Fase 3)
+    }
+
+Tambien agregar en model User la relacion inversa:
+    constanciasFirmadas Constancia[] @relation("ConstanciasFirmadas")
+
+Y anadir el campo de motivo de rechazo, que hoy falta (ver seccion 5.3):
+    rejectedReason String? @db.Text
+
+Migracion:
+    npx prisma migrate dev --name add_firma_digital_constancias
+
+Todos los campos son opcionales, asi que la migracion es no destructiva y las
+constancias historicas migradas de Firebase siguen funcionando igual.
+
+3.3 GENERACION DEL CODIGO DE VERIFICACION
+-----------------------------------------
+Archivo nuevo: lib/documents/verification-code.ts
+
+Requisitos del codigo:
+  - No adivinable: NO usar el id secuencial ni el constanciaNumber. Si el
+    codigo es predecible, cualquiera enumera todas las constancias de la
+    universidad desde la pagina publica.
+  - Legible por humanos: alguien lo va a teclear desde un papel. Usar alfabeto
+    sin caracteres ambiguos (excluir 0/O, 1/I/L).
+  - Formato sugerido: CS-{year}-{8 caracteres}
+
+    import { randomBytes } from "crypto"
+    const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  // sin 0,O,1,I,L
+    export function generateVerificationCode(year: number): string {
+      const bytes = randomBytes(8)
+      const body = Array.from(bytes)
+        .map(b => ALPHABET[b % ALPHABET.length])
+        .join("")
+      return `CS-${year}-${body}`
+    }
+
+  Colision: el campo es @unique. Envolver la insercion en un reintento (hasta
+  3 veces) capturando el error P2002 de Prisma.
+
+3.4 PLANTILLA Y GENERACION DEL PDF
+----------------------------------
+Archivo nuevo: lib/documents/constancia-pdf.ts
+
+    export interface ConstanciaPdfData {
+      constanciaNumber: string
+      fullName: string
+      studentCode: string
+      dni?: string | null
+      year: number
+      observation?: string | null
+      verificationCode: string
+      verifyUrl: string          // https://<host>/verificar/<code>
+      approvedByName?: string
+      approvedAt?: Date | null
+    }
+
+    export async function buildConstanciaPdf(data: ConstanciaPdfData): Promise<Buffer>
+
+Contenido del documento (coordinar el texto exacto con Secretaria General
+antes de programarlo; el formato de una constancia oficial no lo define el
+area de sistemas):
+
+    [ escudo UNAMAD ]        UNIVERSIDAD NACIONAL AMAZONICA DE MADRE DE DIOS
+                             Direccion de Proyeccion Social y Extension Cultural
+
+                                  CONSTANCIA N.o {constanciaNumber}
+
+    El que suscribe hace constar que {FULL NAME}, identificado(a) con DNI
+    {dni}, codigo universitario {studentCode}, ha participado / cumplido ...
+    correspondiente al ano academico {year}.
+
+    {observation}
+
+    Puerto Maldonado, {fecha en letras}
+
+              [ firma ]                       [ QR ]
+              {approvedByName}                Codigo de verificacion:
+              {cargo}                         {verificationCode}
+                                              Verifique en:
+                                              {verifyUrl}
+
+Detalles tecnicos que importan:
+  - Color institucional: #db0455 (magenta). Es el color real de la UNAMAD.
+  - Fuente: si se usa una tipografia con tildes/n, registrar fontkit
+    (pdfDoc.registerFontkit) y embeber el .ttf; las fuentes estandar de pdf-lib
+    (StandardFonts.Helvetica) NO soportan bien caracteres fuera de WinAnsi.
+  - El QR se genera con qrcode.toBuffer(verifyUrl, { errorCorrectionLevel: 'M',
+    margin: 1 }) y se incrusta con pdfDoc.embedPng().
+  - Poner el verificationCode tambien en TEXTO, no solo en el QR. Un QR
+    fotocopiado o borroso deja de leerse.
+  - Metadatos del PDF: setTitle, setAuthor("UNAMAD"), setProducer, setSubject.
+
+3.5 CALCULO DEL HASH
+--------------------
+Archivo nuevo: lib/documents/content-hash.ts
+
+    import { createHash } from "crypto"
+    export function sha256Hex(buf: Buffer): string {
+      return createHash("sha256").update(buf).digest("hex")
+    }
+
+El hash se calcula sobre el PDF FINAL, tal como se guarda en disco, y se
+persiste en Constancia.contentHash. En la pagina de verificacion se muestran
+los primeros 16 caracteres para que un tercero pueda cotejar. En Fase 2, el
+hash se calcula ANTES de firmar y ademas se guarda el hash del firmado.
+
+3.6 ENDPOINT DE GENERACION
+--------------------------
+Archivo nuevo: app/api/documents/constancias/[id]/generar/route.ts
+
+Flujo (POST):
+
+  1. const session = await auth();  si no hay -> 401
+  2. hasPermission(session.user.id, "constancias.access", PermissionAction.EXPORT)
+     si no -> 403
+     (Se usa EXPORT porque ya existe, ya esta en la UI y hoy no hace nada.
+      No hace falta crear un permiso nuevo ni tocar el seed.)
+  3. Cargar la constancia. Si no existe -> 404.
+  4. VALIDAR ESTADO: solo se genera si status === "APROBADO".
+     Generar un PDF oficial de algo PENDIENTE es emitir un documento no
+     aprobado. Rechazar con 409 y mensaje claro.
+  5. Si ya tiene generatedAt y contentHash -> por defecto NO regenerar,
+     devolver el existente. Regenerar solo con ?force=true y permiso
+     SUPER_ADMIN, y dejar rastro en AuditLog. Regenerar cambia el hash y
+     por tanto invalida cualquier copia impresa que ya circule.
+  6. Si no tiene verificationCode, generarlo (con reintento por colision).
+  7. buildConstanciaPdf() -> Buffer
+  8. sha256Hex(buffer) -> contentHash
+  9. Escribir con el patron existente:
+        const safeNumber = sanitizeFileNameSegment(constanciaNumber, "constancia")
+        const fileName = `${safeNumber}_${Date.now()}.pdf`
+        const uploadDir = path.join(UPLOADS_ROOT, "constancias")
+        await mkdir(uploadDir, { recursive: true })
+        await writeFile(path.join(uploadDir, fileName), buffer)
+ 10. Actualizar la constancia: fileName, fileUrl, fileSize, fileMimeType,
+     verificationCode, contentHash, generatedAt.
+     >> fileUrl DEBE quedar como /api/documents/files/constancias/{fileName}
+        exactamente, porque belongsToApprovedDocument() compara por igualdad.
+ 11. Escribir AuditLog con action "constancias.generated", entity "Constancia",
+     entityId, metadata { constanciaNumber, verificationCode, contentHash,
+     ip: x-forwarded-for, userAgent }.
+ 12. Devolver { fileUrl, verificationCode, contentHash }.
+
+TRANSACCIONALIDAD: el archivo se escribe en disco y la BD se actualiza despues.
+Si la BD falla, queda un PDF huerfano en disco. Opciones: escribir a un nombre
+temporal, actualizar BD, y renombrar al final; o aceptar el huerfano y tener un
+script de limpieza. Lo segundo es suficiente aqui, pero hay que decidirlo
+conscientemente, no por descuido.
+
+3.7 PAGINA PUBLICA DE VERIFICACION
+----------------------------------
+Archivos nuevos:
+  app/verificar/[code]/page.tsx           server component, sin sesion
+  app/verificar/page.tsx                  formulario para teclear el codigo
+  app/api/public/verificar/[code]/route.ts  (opcional, si se quiere consumir por API)
+
+Que debe mostrar cuando el codigo EXISTE y la constancia esta APROBADA:
+
+    [ check verde ] DOCUMENTO VALIDO
+
+    Constancia N.o        CS-0123-2026
+    Emitida a             JUAN PEREZ QUISPE          <- nombre completo, si
+    Codigo universitario  20201234                   <- ver nota de privacidad
+    DNI                   ******78                   <- ENMASCARADO
+    Ano                   2026
+    Estado                APROBADO
+    Fecha de aprobacion   12/03/2026
+    Huella SHA-256        a1b2c3d4e5f6a7b8...
+
+    [ Descargar PDF original ]
+
+Que debe mostrar si NO existe, o si esta PENDIENTE/RECHAZADO/ANULADO:
+
+    [ x rojo ] DOCUMENTO NO VALIDO
+    No se encontro ningun documento vigente con ese codigo de verificacion.
+
+  IMPORTANTE: la respuesta debe ser IDENTICA para "no existe" y para
+  "existe pero no esta aprobado". Si son distintas, la pagina se convierte en
+  un oraculo que confirma la existencia de constancias no aprobadas.
+
+PRIVACIDAD (decidir con el area legal, no por defecto tecnico):
+  - El endpoint publico existente ya enmascara el DNI: ver maskDni() en
+    app/api/public/documentos/buscar/route.ts:7-11 (deja los 2 ultimos digitos).
+    Mantener exactamente ese criterio aqui por coherencia.
+  - Evaluar si el nombre completo debe mostrarse entero o parcialmente. El caso
+    de uso es: un empleador tiene el papel en la mano y quiere confirmarlo. Si
+    ya tiene el papel, ya tiene el nombre, asi que mostrarlo no filtra nada
+    NUEVO a quien tiene el codigo. Pero como el codigo es no adivinable, esto
+    es aceptable. Si el codigo fuera secuencial, no lo seria.
+
+RATE LIMITING: reutilizar lib/security/rate-limit.ts, igual que hace
+app/api/public/documentos/buscar/route.ts:19-21 (hoy 20 peticiones / 5 min por
+IP). Para /verificar conviene un limite algo mas alto pero existente, p.ej.
+60/5min, para frenar enumeracion por fuerza bruta.
+
+3.8 CAMBIOS EN LA UI
+--------------------
+  components/documents/constancias-page-client.tsx:69-77
+      Cablear el boton "Exportar" (hoy sin onClick). Puede llamar a la
+      generacion masiva o simplemente al CSV; decidir. Como minimo, dejar de
+      mostrar un boton muerto.
+
+  components/documents/constancias-data-table.tsx
+      Agregar al menu de acciones de cada fila:
+        - "Generar constancia oficial"  (visible si canExport && status===APROBADO)
+        - "Copiar enlace de verificacion"
+      Hoy la descarga es window.open(fileUrl) en las lineas 313-317.
+
+  components/documents/view-constancia-dialog.tsx
+      Mostrar el verificationCode, el QR y la huella hash cuando existan.
+
+3.9 ORDEN DE TRABAJO SUGERIDO PARA LA FASE 1
+--------------------------------------------
+  1. Definir con Secretaria General el TEXTO y el FORMATO oficial. Bloqueante:
+     no tiene sentido programar la maqueta dos veces.
+  2. Migracion Prisma (3.2).
+  3. lib/documents/verification-code.ts + content-hash.ts (3.3, 3.5). Triviales.
+  4. lib/documents/constancia-pdf.ts (3.4). Es el grueso del trabajo.
+  5. Endpoint de generacion (3.6).
+  6. Pagina publica /verificar (3.7).
+  7. UI (3.8).
+  8. Pruebas: generar, escanear el QR con un telefono real, imprimir y volver
+     a escanear la fotocopia.
+
+
+================================================================================
+4. FASE 2 - FIRMA CRIPTOGRAFICA (PAdES)
+================================================================================
+
+4.1 ARQUITECTURA
+----------------
+Definir una interfaz para no quedar amarrado al proveedor:
+
+  lib/documents/signing/signer.ts
+      export interface PdfSigner {
+        sign(pdf: Buffer, meta: SignRequest): Promise<SignedResult>
+        describe(): { type: SignatureType; issuer: string; serial: string }
+      }
+
+  lib/documents/signing/local-signer.ts    implementacion con certificado propio
+  lib/documents/signing/iofe-signer.ts     (Fase 3, si se decide)
+
+El endpoint de generacion llama al signer configurado por variable de entorno.
+Si no hay signer configurado, signatureType queda en NINGUNA y el sistema sigue
+funcionando en modo Fase 1. Esto permite desplegar la Fase 2 sin big bang.
+
+4.2 GESTION DE LA CLAVE PRIVADA - LO CRITICO
+--------------------------------------------
+Esta es la parte que hay que hacer bien; el resto es plomeria.
+
+  - La clave privada NUNCA en el repositorio. Ni cifrada. Nunca.
+  - NUNCA en public/. Ubicarla fuera del document root, junto a uploads/.
+  - Ruta y passphrase por variable de entorno:
+        SIGNING_CERT_PATH=C:/certs/unamad-proyeccion.p12
+        SIGNING_CERT_PASSPHRASE=...
+    y el .env fuera del control de versiones (verificar .gitignore).
+  - Permisos del sistema de archivos: solo la cuenta que corre el proceso Node
+    debe poder leer el .p12.
+  - Registrar en AuditLog CADA firma: quien la disparo, cuando, sobre que
+    documento, con que serie de certificado.
+  - Plan de rotacion y de revocacion ANTES de emitir el primer documento
+    firmado. Que pasa con los 5000 documentos ya firmados cuando el certificado
+    expire o se comprometa? Respuesta: por eso se guarda signatureMeta con la
+    serie y la fecha, y por eso la verificacion en linea (Fase 1) es el
+    mecanismo primario de confianza y la firma es refuerzo.
+  - Idealmente, un HSM o el almacen de certificados de Windows. Un .p12 en
+    disco con passphrase en .env es el minimo aceptable, no lo deseable.
+
+4.3 IMPLEMENTACION
+------------------
+pdf-lib por si solo NO firma; hay que combinarlo con una libreria de firma
+(por ejemplo node-signpdf / @signpdf, o generar el CMS con node-forge). El
+patron es: reservar un ByteRange y un placeholder de firma en el PDF, calcular
+el digest sobre el resto, generar la estructura PKCS#7/CMS y sustituirla.
+
+Sellado de tiempo (TSA): sin sello de tiempo, cuando el certificado expire no
+se podra distinguir "firmado cuando era valido" de "firmado despues". Si se va
+a Fase 2 en serio, incluir TSA desde el inicio.
+
+Se guarda en signatureMeta: { issuer, serialNumber, algorithm, signedAt,
+tsaUrl?, tsaToken? }.
+
+4.4 SI EL CERTIFICADO ES AUTOFIRMADO
+------------------------------------
+Adobe Reader mostrara "La validez de la firma es DESCONOCIDA" con triangulo
+amarillo, salvo que el receptor instale la CA raiz de la UNAMAD. Esto confunde
+mas de lo que ayuda ante un tercero externo. Por eso: la Fase 1 (QR +
+verificacion en linea) es la que hay que priorizar; la Fase 2 con certificado
+autofirmado tiene valor sobre todo para integridad interna y auditoria.
+
+
+================================================================================
+5. OTRAS MEJORAS RECOMENDADAS
+================================================================================
+Ordenadas por relacion valor/esfuerzo. Varias son mas urgentes que la propia
+firma digital.
+
+5.1 AUDITORIA INCOMPLETA  [ALTA - hacerlo ya]
+---------------------------------------------
+Hoy AuditLog solo registra aprobacion y rechazo:
+    app/api/documents/constancias/[id]/approve/route.ts:85-97
+    app/api/documents/constancias/[id]/reject/route.ts:80
+
+NO se registra:
+    - Creacion de constancia (POST /api/documents/constancias)
+    - Edicion (PATCH)
+    - ELIMINACION (DELETE)          <- la mas grave de todas
+    - Ninguna operacion del modulo de resoluciones (ni approve ni reject)
+
+Un modulo que emite documentos oficiales y no deja rastro de quien borro que,
+no es auditable. Esfuerzo: bajo, es replicar el bloque que ya existe en
+approve/route.ts. Impacto: alto.
+
+Ademas: no hay ninguna vista de auditoria en el modulo de documentos. La unica
+esta en components/users/roles-management-view.tsx:102-136. Conviene una
+pestana de historial dentro de la ficha de cada constancia.
+
+5.2 EL ESTADO "ANULADO" ESTA MUERTO  [ALTA]
+-------------------------------------------
+DocumentStatus incluye ANULADO (prisma/schema.prisma:334-339) pero ningun
+endpoint lo usa jamas. Hoy, para deshacer una constancia mal emitida, la unica
+salida es DELETE, que ademas esta bloqueado si ya fue aprobada
+(app/api/documents/constancias/[id]/route.ts:294).
+
+Resultado: una constancia aprobada por error es IRREVERSIBLE salvo tocando la
+base de datos a mano.
+
+Implementar: POST /api/documents/constancias/[id]/anular con motivo obligatorio,
+que escriba revokedAt/revokedById/revokedReason y AuditLog. La pagina publica
+de verificacion debe mostrar "DOCUMENTO ANULADO" con la fecha, no "no existe":
+si alguien tiene el papel en la mano, tiene derecho a saber que fue anulado.
+
+5.3 EL RECHAZO NO GUARDA MOTIVO  [MEDIA]
+----------------------------------------
+app/api/documents/constancias/[id]/reject/route.ts:58-61 solo cambia el status.
+El solicitante nunca sabe por que le rechazaron. Agregar rejectedReason (ya
+incluido en la migracion propuesta en 3.2) y hacerlo obligatorio en el dialogo.
+
+5.4 FLUJO DE ESTADOS SIN RETORNO  [MEDIA]
+-----------------------------------------
+No existe transicion RECHAZADO -> PENDIENTE. Si se rechaza por un error
+tipografico, hay que crear todo de nuevo. Agregar una accion "reabrir" o
+permitir editar un RECHAZADO devolviendolo a PENDIENTE.
+
+5.5 NO HAY PERMISO SEPARADO PARA APROBAR  [MEDIA - riesgo de control interno]
+-----------------------------------------------------------------------------
+Hoy aprobar y rechazar usan PermissionAction.UPDATE:
+    approve/route.ts:25 y reject/route.ts:22
+
+Es decir: cualquiera que pueda EDITAR una constancia puede APROBARLA. No hay
+separacion de funciones. Quien captura el dato puede autoaprobarse su propio
+registro.
+
+Opciones:
+  (a) Crear un codigo de permiso nuevo, p.ej. "constancias.approve", con su
+      entrada en prisma/seed.ts (el patron esta en seed.ts:411-500).
+  (b) Como minimo, prohibir que createdById === session.user.id al aprobar
+      (regla de "cuatro ojos"). Es una linea de codigo y cubre el 80% del
+      riesgo.
+
+Recomendacion: hacer (b) ahora y (a) cuando se toque el seed.
+
+5.6 CONSTANCIA SOLO ADMITE UN ARCHIVO  [MEDIA]
+----------------------------------------------
+Resolucion tiene ArchivoResolucion (prisma/schema.prisma:556-570) con tipos
+'resolucion'/'acta'/'anexo'. Constancia tiene los campos embebidos y punto.
+
+Al generar el PDF oficial se SOBRESCRIBE fileUrl, perdiendo el escaneado
+original. Conviene un model ArchivoConstancia analogo, con tipo
+'original' / 'generado' / 'firmado', para conservar la cadena completa.
+Si se hace, hay que agregarlo tambien a la consulta de
+belongsToApprovedDocument() en app/api/documents/files/[...path]/route.ts:27-51.
+
+5.7 CODIGOS DE PERMISO COMO STRINGS SUELTOS  [BAJA - deuda tecnica]
+-------------------------------------------------------------------
+"constancias.access" aparece como literal repetido en al menos 8 archivos.
+Un typo no falla en compilacion, falla en runtime negando el acceso. Crear
+lib/permissions/codes.ts con constantes exportadas y reemplazar.
+
+5.8 GENERACION MASIVA  [BAJA - pero muy pedida en la practica]
+--------------------------------------------------------------
+Una vez existe buildConstanciaPdf(), generar 200 constancias de una actividad
+es un bucle. Vale la pena:
+    POST /api/documents/constancias/generar-lote   con lista de ids
+Devolver un ZIP, o mejor, procesarlo en background y notificar por correo
+(nodemailer ya esta instalado y hay plantillas en lib/email-templates.ts).
+Cuidado con el timeout de la ruta si son cientos de documentos.
+
+5.9 NOTIFICACION AL ESTUDIANTE  [BAJA]
+--------------------------------------
+Ya hay nodemailer configurado. Cuando una constancia pasa a APROBADO, enviar
+correo con el enlace de verificacion. Cierra el circulo y reduce consultas
+presenciales.
+
+5.10 SIN PRUEBAS AUTOMATIZADAS  [MEDIA]
+---------------------------------------
+No hay ningun framework de test en package.json. Para un modulo que va a
+generar documentos oficiales y calcular hashes, como minimo hacen falta
+pruebas de: generacion determinista del PDF, unicidad del codigo de
+verificacion, y que la pagina de verificacion no filtre documentos no
+aprobados.
+
+5.11 OBSERVACION SOBRE package.json  [TRIVIAL]
+----------------------------------------------
+El campo "name" del proyecto sigue siendo "login". Cambiarlo a algo como
+"proyeccion-social-unamad".
+
+
+================================================================================
+6. RESUMEN EJECUTIVO
+================================================================================
+
+QUE HAY QUE ENTENDER PRIMERO
+    El sistema no genera constancias, solo archiva escaneos. "Implementar firma
+    digital" implica antes implementar generacion de documentos. Es un proyecto
+    mas grande de lo que el titulo sugiere, pero la base de seguridad de
+    archivos que ya existe (lib/security/uploads.ts) esta bien hecha y ahorra
+    mucho trabajo.
+
+QUE DA MAS VALOR POR MENOS ESFUERZO
+    1. Completar la auditoria (5.1) y la regla de cuatro ojos (5.5b). Dias.
+    2. Fase 1: PDF + QR + verificacion publica (seccion 3). Esto es lo que
+       realmente impide que falsifiquen una constancia de la UNAMAD.
+    3. Implementar ANULADO (5.2).
+
+QUE DEJAR PARA DESPUES
+    La firma criptografica PAdES (Fase 2) y sobre todo la IOFE (Fase 3). No
+    porque no sirvan, sino porque sin la Fase 1 nadie sabe validarlas, y
+    porque la Fase 3 depende de una decision y un presupuesto institucional
+    que no controla el area de sistemas.
+
+DECISIONES QUE NO SON TECNICAS Y HAY QUE CONSULTAR
+    - Texto y formato oficial de la constancia -> Secretaria General.
+    - Que datos personales se muestran en la pagina publica -> area legal.
+    - Si la universidad ira a certificados IOFE -> alta direccion.
+    - Marco normativo vigente de firma digital en Peru -> verificar con fuente
+      oficial, no asumir lo escrito en la seccion 2 de este documento.
+
+================================================================================
+Fin del documento.
+================================================================================

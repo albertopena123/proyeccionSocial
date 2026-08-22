@@ -1,15 +1,20 @@
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 // Content-Security-Policy.
 //
 // 'unsafe-inline' en script-src es necesario mientras el layout inyecte el
 // snippet de Google Analytics y Next sus scripts de arranque en línea; para
-// quitarlo hay que migrar a nonces. Lo que sí se cierra aquí es lo que no cuesta
-// nada: object-src (plugins), base-uri (secuestro de rutas relativas) y
-// frame-ancestors (clickjacking sobre los formularios de aprobación).
+// quitarlo hay que migrar a nonces. En desarrollo, React Refresh / Webpack
+// requieren 'unsafe-eval' para la recarga en caliente y el runtime de Next.js.
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com"
+  : "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com";
+
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
+  scriptSrc,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://lh3.googleusercontent.com https://via.placeholder.com https://images.unsplash.com",
   "font-src 'self' data:",
@@ -19,7 +24,7 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  "upgrade-insecure-requests",
+  ...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");
 
 const securityHeaders = [
@@ -28,8 +33,8 @@ const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-  // La app sólo se sirve por HTTPS detrás del proxy de Apache.
-  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+  // La app sólo se sirve por HTTPS detrás del proxy de Apache en producción.
+  ...(!isDev ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" }] : []),
 ];
 
 const nextConfig: NextConfig = {

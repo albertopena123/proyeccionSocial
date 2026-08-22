@@ -1,0 +1,743 @@
+================================================================================
+UNIVERSIDAD NACIONAL AMAZÓNICA DE MADRE DE DIOS
+Dirección de Proyección Social y Extensión Cultural
+
+INFORME TÉCNICO DE REQUERIMIENTO N.° [____] - 2026 - DPSEC/UNAMAD
+
+DIRIGIDO A : Oficina de Tecnologías de la Información (OTI)
+DE         : [Nombre y cargo del solicitante]
+ASUNTO     : Requerimiento de desarrollo de dos módulos para el Sistema de
+             Proyección Social: (1) Emisión de constancias con firma digital
+             y verificación en línea, y (2) Panel de noticias y gestión de
+             contenido del portal público.
+FECHA      : Puerto Maldonado, [__] de [________] de 2026
+================================================================================
+
+
+--------------------------------------------------------------------------------
+I. SUMILLA
+--------------------------------------------------------------------------------
+
+Se solicita a la Oficina de Tecnologías de la Información la evaluación y
+priorización del desarrollo de dos módulos sobre el Sistema de Proyección
+Social actualmente en operación:
+
+  MÓDULO 1 — EMISIÓN DE CONSTANCIAS CON FIRMA DIGITAL
+             Constancias de Voluntariado y Constancias de Actividades
+             Culturales y Extracurriculares.
+
+  MÓDULO 2 — PANEL DE NOTICIAS Y GESTIÓN DE CONTENIDO DEL PORTAL PÚBLICO
+
+Ambos módulos responden a necesidades operativas ya identificadas y verificadas
+sobre el código en producción. El presente informe incluye el diagnóstico
+técnico de la situación actual, los requisitos funcionales numerados de cada
+módulo, los recursos requeridos y una estimación referencial de plazos.
+
+
+--------------------------------------------------------------------------------
+II. ANTECEDENTES
+--------------------------------------------------------------------------------
+
+2.1  La Dirección de Proyección Social y Extensión Cultural cuenta con un
+     Sistema de Proyección Social desarrollado sobre Next.js 15, PostgreSQL y
+     Prisma ORM, con autenticación, control de roles y permisos granulares en
+     operación.
+
+2.2  El sistema dispone de un módulo de Constancias que permite registrar,
+     aprobar y custodiar constancias emitidas, así como un buscador público de
+     documentos aprobados accesible en la ruta /consulta-documentos.
+
+2.3  Recientemente se implementó un portal público institucional (página de
+     inicio) con secciones de presentación, elencos culturales, actividades,
+     responsabilidad social y contacto.
+
+2.4  Se ha identificado que el módulo de Constancias no genera documentos:
+     únicamente almacena archivos escaneados de constancias emitidas por medios
+     externos al sistema. Asimismo, el portal público no cuenta con ningún
+     mecanismo de actualización de contenido por parte de personal no técnico.
+
+
+--------------------------------------------------------------------------------
+III. SITUACIÓN ACTUAL (DIAGNÓSTICO TÉCNICO)
+--------------------------------------------------------------------------------
+
+El presente diagnóstico fue verificado directamente sobre el código fuente del
+sistema. Las rutas de archivo citadas son reales y se incluyen para facilitar
+la evaluación técnica por parte de OTI.
+
+3.1  RESPECTO A LAS CONSTANCIAS
+
+  a) El sistema NO genera constancias. No existe ninguna librería de generación
+     de documentos PDF instalada en el proyecto, ni plantilla documental
+     alguna. El flujo actual es: el personal administrativo elabora la
+     constancia por medios externos (procesador de texto), la imprime, la firma
+     de forma manuscrita, la escanea y la carga al sistema.
+
+  b) No existe forma de distinguir el tipo de constancia. El modelo de datos
+     (prisma/schema.prisma:373-416) no contempla ningún campo de subtipo,
+     modalidad o categoría. Todas las constancias son estructuralmente
+     idénticas. En el formulario de creación el tipo se envía fijo como
+     "CONSTANCIA" (components/documents/create-constancia-dialog.tsx:78).
+     En consecuencia, hoy NO es posible emitir, filtrar, contabilizar ni
+     reportar por separado las constancias de Voluntariado y las de
+     Actividades Culturales y Extracurriculares.
+
+  c) No existe mecanismo de verificación de autenticidad. No hay código QR, ni
+     código de verificación, ni cálculo de integridad (hash), ni firma
+     electrónica o digital de ningún tipo. Un tercero que recibe una constancia
+     de la UNAMAD no tiene forma de comprobar que no ha sido adulterada, salvo
+     buscarla por texto en el portal público.
+
+  d) La trazabilidad es incompleta. El registro de auditoría del sistema
+     (modelo AuditLog) solo captura las acciones de aprobación y rechazo. NO
+     registra la creación, la edición ni la ELIMINACIÓN de constancias.
+
+  e) No existe separación de funciones. La acción de aprobar una constancia
+     utiliza el mismo permiso que la de editarla, por lo que el mismo usuario
+     que registra una constancia puede aprobarla.
+
+  f) El estado "ANULADO" está previsto en el modelo de datos pero no se
+     encuentra implementado en ninguna operación del sistema. Una constancia
+     aprobada por error no puede revertirse por vía funcional.
+
+  g) La opción "Exportar" existe en la interfaz de usuario pero no ejecuta
+     ninguna acción (components/documents/constancias-page-client.tsx:69-77).
+
+  h) Aspecto positivo a destacar: el sistema cuenta con un módulo de seguridad
+     de archivos correctamente implementado (lib/security/uploads.ts), con
+     validación de tipo real de archivo, control de tamaño, prevención de
+     recorrido de directorios y almacenamiento fuera del directorio público.
+     Este componente es reutilizable y reduce el esfuerzo del Módulo 1.
+
+3.2  RESPECTO AL PORTAL PÚBLICO
+
+  a) La totalidad del contenido del portal está codificada directamente en el
+     programa. Los elencos, las actividades, los textos institucionales, los
+     datos de contacto y las cifras de impacto son constantes literales en
+     archivos de código fuente (lib/elencos.ts:24, lib/actividades.ts:23,
+     lib/site-config.ts:5, components/landing/responsabilidad-oruga.tsx:27),
+     y varios títulos están escritos directamente en la vista.
+
+  b) En consecuencia, cualquier actualización del portal —publicar una noticia,
+     cambiar una fotografía de actividad, corregir un teléfono, actualizar una
+     cifra— requiere la intervención de un programador, la modificación del
+     código fuente y un nuevo despliegue del sistema. La Dirección no tiene
+     autonomía para comunicar.
+
+  c) No existe ningún modelo de datos de contenido. La base de datos no
+     contempla entidades de Noticia, Publicación, Evento, Galería ni
+     equivalentes.
+
+  d) Los mensajes enviados desde el formulario de contacto del portal NO se
+     almacenan (app/api/contacto/route.ts): se reenvían por correo electrónico
+     y no queda registro en el sistema. No existe bandeja de atención ni
+     seguimiento de consultas ciudadanas.
+
+  e) Aspecto positivo a destacar: el sistema YA CUENTA con el andamiaje de
+     permisos del módulo de contenido. En prisma/seed.ts:187-220 está definido
+     el módulo "Gestión de Contenido" con los submódulos "Artículos" y
+     "Categorías", y sus permisos correspondientes (articles.access,
+     categories.access). Actualmente aparece en el menú de navegación pero no
+     conduce a ninguna funcionalidad. Esto significa que la estructura de
+     autorización del Módulo 2 no debe crearse desde cero.
+
+
+--------------------------------------------------------------------------------
+IV. JUSTIFICACIÓN DE LA NECESIDAD
+--------------------------------------------------------------------------------
+
+4.1  RIESGO DE FALSIFICACIÓN DE DOCUMENTOS INSTITUCIONALES
+     Las constancias de voluntariado y de actividades culturales son
+     presentadas por los estudiantes ante empleadores, entidades públicas y
+     procesos de admisión. Al no existir mecanismo de verificación, la
+     institución no puede desconocer un documento falsificado ni confirmar uno
+     auténtico de manera oportuna y fehaciente.
+
+4.2  CARGA OPERATIVA EVITABLE
+     La elaboración manual de cada constancia consume tiempo del personal
+     administrativo en una tarea íntegramente automatizable. En periodos de
+     alta demanda (cierre de ciclo, procesos de titulación) esto genera
+     acumulación de solicitudes y atención presencial innecesaria.
+
+4.3  IMPOSIBILIDAD DE REPORTAR POR TIPO DE ACTIVIDAD
+     Al no distinguirse el tipo de constancia, la Dirección no puede generar
+     estadísticas separadas de voluntariado y de actividades culturales, lo
+     que limita la elaboración de informes de gestión y la sustentación de
+     requerimientos presupuestales.
+
+4.4  DEBILIDAD DE CONTROL INTERNO
+     La ausencia de registro de eliminaciones y la falta de separación entre
+     quien registra y quien aprueba constituyen observaciones potenciales ante
+     una acción de control.
+
+4.5  DESACTUALIZACIÓN DEL PORTAL INSTITUCIONAL
+     La dependencia técnica para publicar cualquier contenido conduce, en la
+     práctica, a un portal estático que no refleja la actividad real de la
+     Dirección, desaprovechando el canal oficial de difusión.
+
+
+--------------------------------------------------------------------------------
+V. REQUERIMIENTO — MÓDULO 1
+   EMISIÓN DE CONSTANCIAS CON FIRMA DIGITAL Y VERIFICACIÓN EN LÍNEA
+--------------------------------------------------------------------------------
+
+5.1  OBJETIVO
+     Que el sistema genere, firme y publique constancias oficiales de
+     Voluntariado y de Actividades Culturales y Extracurriculares, con un
+     mecanismo de verificación de autenticidad accesible a cualquier tercero.
+
+5.2  TIPOS DE CONSTANCIA A INCORPORAR
+     T-01  Constancia de Voluntariado
+     T-02  Constancia de Actividades Culturales y Extracurriculares
+
+     Cada tipo debe admitir su propia plantilla, su propia numeración
+     correlativa y su propio texto oficial. La estructura debe permitir
+     incorporar tipos adicionales en el futuro sin modificar el programa.
+
+     NOTA TÉCNICA: los registros históricos migrados desde el sistema anterior
+     (Firebase) no cuentan con esta distinción. Se ha detectado que el origen
+     de datos poseía un campo denominado "type_create" que no fue migrado
+     (scripts/migrate-constancias.js:139-166). Se recomienda revisar los
+     respaldos originales antes de definir la estrategia de clasificación
+     retroactiva.
+
+5.3  REQUISITOS FUNCIONALES
+
+  CLASIFICACIÓN Y REGISTRO
+  RF-01  El sistema debe permitir seleccionar el tipo de constancia
+         (Voluntariado / Actividades Culturales y Extracurriculares) al
+         momento del registro.
+  RF-02  El sistema debe mantener numeración correlativa independiente por
+         tipo de constancia y por año.
+  RF-03  El listado de constancias debe permitir filtrar y buscar por tipo.
+  RF-04  Se debe definir el tratamiento de las constancias históricas ya
+         migradas que carecen de tipo.
+
+  GENERACIÓN DEL DOCUMENTO
+  RF-05  El sistema debe generar el documento PDF de la constancia a partir de
+         los datos registrados, sin intervención de herramientas externas.
+  RF-06  El documento debe respetar el formato oficial aprobado por la
+         instancia competente, incluyendo escudo institucional, denominación
+         de la Universidad y de la Dirección, y el color institucional
+         (#db0455).
+  RF-07  La generación solo debe ser posible sobre constancias en estado
+         APROBADO. No debe permitirse generar el documento oficial de una
+         constancia pendiente o rechazada.
+  RF-08  El sistema no debe regenerar un documento ya emitido de forma
+         automática. La regeneración debe ser una acción excepcional,
+         restringida al perfil de máxima jerarquía y registrada en auditoría,
+         dado que altera la huella de integridad de las copias en circulación.
+  RF-09  El sistema debe conservar tanto el documento generado como, cuando
+         exista, el archivo escaneado original.
+
+  VERIFICACIÓN DE AUTENTICIDAD
+  RF-10  Cada constancia debe contar con un código de verificación único, no
+         secuencial y no predecible, legible por una persona (evitando
+         caracteres ambiguos), impreso en el documento.
+  RF-11  El documento debe incluir un código QR que enlace a la página de
+         verificación de esa constancia.
+  RF-12  El código de verificación debe figurar también en texto plano, además
+         del QR, para los casos de fotocopia o deterioro del documento.
+  RF-13  El sistema debe calcular y almacenar la huella criptográfica
+         (SHA-256) del documento generado.
+  RF-14  Debe existir una página pública de verificación, sin necesidad de
+         iniciar sesión, que muestre los datos del documento y su estado.
+  RF-15  La página de verificación debe responder de manera idéntica cuando el
+         código no existe y cuando existe pero el documento no está vigente,
+         a fin de no revelar información sobre documentos no aprobados.
+  RF-16  La página de verificación debe enmascarar el número de documento de
+         identidad, aplicando el mismo criterio ya vigente en el buscador
+         público del sistema.
+  RF-17  La página de verificación debe contar con limitación de frecuencia de
+         consultas por dirección IP, para impedir la enumeración masiva.
+
+  FIRMA DIGITAL
+  RF-18  El documento debe incorporar la firma del funcionario autorizado y el
+         sello de la Dirección.
+  RF-19  El sistema debe estar preparado para aplicar firma digital
+         criptográfica (formato PAdES) sobre el documento generado, de modo
+         que cualquier alteración posterior invalide la firma.
+  RF-20  El componente de firma debe implementarse de forma desacoplada, de
+         manera que el proveedor de certificado pueda sustituirse sin rehacer
+         el módulo (ver numeral 5.5 sobre niveles de firma).
+  RF-21  El sistema debe registrar, por cada documento firmado, la identidad
+         del firmante, la fecha y hora, y los datos del certificado empleado.
+  RF-22  La clave privada del certificado no debe residir en el repositorio de
+         código ni en el directorio público del servidor web.
+
+  TRAZABILIDAD Y CONTROL INTERNO
+  RF-23  El registro de auditoría debe capturar la creación, edición,
+         eliminación, generación, firma y anulación de constancias, además de
+         la aprobación y el rechazo ya contemplados.
+  RF-24  Debe implementarse la anulación de constancias, con motivo
+         obligatorio, sustituyendo la eliminación física del registro.
+  RF-25  La página pública de verificación debe informar expresamente cuando
+         un documento ha sido ANULADO, indicando la fecha, y no presentarlo
+         como inexistente.
+  RF-26  El rechazo de una constancia debe registrar el motivo, el cual debe
+         ser comunicado al solicitante.
+  RF-27  Debe implementarse separación de funciones: el usuario que registra
+         una constancia no debe poder aprobarla.
+  RF-28  Cada constancia debe disponer de un historial de acciones consultable
+         desde su propia ficha.
+
+  FUNCIONALIDADES COMPLEMENTARIAS
+  RF-29  El sistema debe permitir la generación por lotes, para atender de una
+         sola vez a todos los participantes de una actividad.
+  RF-30  Al aprobarse una constancia, el sistema debe notificar por correo
+         electrónico al estudiante, incluyendo el enlace de verificación.
+  RF-31  El sistema debe permitir exportar el listado de constancias en
+         formato de hoja de cálculo, con filtros por tipo, año y estado.
+
+5.4  ALCANCE EXCLUIDO
+     No forma parte de este requerimiento la digitalización retroactiva ni la
+     regeneración de las constancias emitidas con anterioridad a la puesta en
+     producción del módulo.
+
+5.5  DEFINICIÓN INSTITUCIONAL REQUERIDA SOBRE EL NIVEL DE FIRMA
+
+     Se solicita a OTI pronunciarse sobre el nivel de firma a adoptar. Existen
+     tres alternativas de naturaleza y costo distintos:
+
+     NIVEL A — Firma electrónica simple con verificación en línea.
+       El documento lleva la firma escaneada del funcionario, el sello, el
+       código de verificación y el QR. La confianza proviene de la
+       confirmación en el portal oficial de la Universidad.
+       Costo externo: ninguno. Plazo: el del propio desarrollo.
+
+     NIVEL B — Firma digital criptográfica con certificado institucional.
+       El documento se firma con un certificado propio de la Universidad.
+       Cualquier alteración invalida la firma de forma verificable.
+       Observación: si el certificado es autofirmado, los lectores de PDF
+       mostrarán una advertencia de "firma no confiable" ante terceros
+       externos, lo que puede resultar contraproducente.
+       Costo externo: bajo. Requiere custodia segura de la clave privada.
+
+     NIVEL C — Firma digital con valor legal pleno.
+       En el Perú, la firma digital con equivalencia legal a la manuscrita se
+       encuentra regulada por la Ley N.° 27269, Ley de Firmas y Certificados
+       Digitales, y su reglamento, en el marco de la Infraestructura Oficial
+       de Firma Electrónica (IOFE), que exige certificados emitidos por
+       entidades de certificación acreditadas.
+       Costo externo: significativo (certificados por firmante, eventual
+       token criptográfico, trámite de acreditación).
+
+       IMPORTANTE: la referencia normativa del Nivel C se consigna a título
+       informativo y debe ser confirmada por la Oficina de Asesoría Jurídica
+       y contrastada con la fuente oficial vigente. La Dirección no la
+       presenta como opinión legal.
+
+     RECOMENDACIÓN DE LA DIRECCIÓN: implementar el Nivel A en la primera
+     etapa, dejando la arquitectura preparada para el Nivel B, y supeditar el
+     Nivel C a decisión de la Alta Dirección con la asignación presupuestal
+     correspondiente. El Nivel A es el que resuelve el problema práctico de
+     falsificación, no depende de terceros y puede entrar en operación en el
+     plazo más corto.
+
+
+--------------------------------------------------------------------------------
+VI. REQUERIMIENTO — MÓDULO 2
+    PANEL DE NOTICIAS Y GESTIÓN DE CONTENIDO DEL PORTAL PÚBLICO
+--------------------------------------------------------------------------------
+
+6.1  OBJETIVO
+     Dotar a la Dirección de autonomía para publicar y actualizar el contenido
+     del portal público institucional sin intervención del área técnica ni
+     nuevos despliegues del sistema.
+
+6.2  REQUISITOS FUNCIONALES
+
+  GESTIÓN DE NOTICIAS
+  RF-40  Debe implementarse un módulo administrativo de noticias, accesible
+         desde el panel del sistema, con operaciones de creación, edición,
+         publicación, despublicación y eliminación.
+  RF-41  Cada noticia debe contemplar como mínimo: título, resumen, contenido,
+         imagen principal, fecha de publicación, autor y estado.
+  RF-42  El sistema debe manejar los estados BORRADOR, PUBLICADO y ARCHIVADO.
+         Únicamente las noticias en estado PUBLICADO deben ser visibles en el
+         portal público.
+  RF-43  Debe ser posible programar la fecha de publicación de una noticia.
+  RF-44  Debe existir clasificación por categorías (por ejemplo: voluntariado,
+         actividades culturales, convocatorias, comunicados), administrable
+         desde el propio panel.
+  RF-45  Debe ser posible destacar una noticia para su presentación
+         preferente en el portal.
+  RF-46  El editor de contenido debe permitir formato básico (negrita,
+         cursiva, listas, enlaces) y debe sanear el contenido ingresado para
+         impedir la inyección de código malicioso.
+
+  PORTAL PÚBLICO
+  RF-47  El portal debe incorporar una sección de noticias con listado
+         paginado y página de detalle por noticia.
+  RF-48  La página de inicio debe mostrar las últimas noticias publicadas.
+  RF-49  Las noticias deben contar con direcciones web legibles y estables
+         (por ejemplo /noticias/festival-de-danzas-2026).
+  RF-50  Cada noticia debe generar los metadatos necesarios para su correcta
+         presentación al ser compartida en redes sociales.
+
+  GESTIÓN DE IMÁGENES
+  RF-51  El sistema debe permitir la carga de imágenes desde el panel
+         administrativo, reutilizando los controles de seguridad de archivos
+         ya implementados (validación de tipo real, límite de tamaño,
+         almacenamiento fuera del directorio público).
+  RF-52  Las imágenes deben optimizarse automáticamente para su publicación en
+         web, a fin de no degradar el tiempo de carga del portal.
+  RF-53  Debe existir una galería que permita reutilizar imágenes ya cargadas.
+
+  CONTENIDO EDITABLE DEL PORTAL
+  RF-54  Los datos de contacto institucional (dirección, teléfono, correo,
+         redes sociales) deben ser editables desde el panel, sin modificar el
+         código fuente.
+  RF-55  Las actividades destacadas del portal deben ser administrables desde
+         el panel (fotografía, título y descripción).
+  RF-56  Las cifras institucionales presentadas en el portal deben ser
+         editables desde el panel.
+
+         OBSERVACIÓN TÉCNICA SOBRE LOS ELENCOS: las imágenes de los elencos
+         culturales tienen el nombre y la descripción incorporados dentro del
+         propio archivo de imagen, no como texto de la página
+         (lib/elencos.ts:13-17). Hacer los elencos administrables exige
+         rehacer las imágenes o modificar el diseño de esa sección. Se sugiere
+         evaluarlo como alcance opcional y no incluirlo en la primera etapa.
+
+  BANDEJA DE MENSAJES DE CONTACTO
+  RF-57  Los mensajes enviados desde el formulario de contacto del portal
+         deben almacenarse en la base de datos, además del envío por correo
+         electrónico que ya se realiza.
+  RF-58  Debe existir una bandeja en el panel administrativo que permita
+         consultar los mensajes recibidos y marcarlos como atendidos.
+
+  CONTROL DE ACCESO Y TRAZABILIDAD
+  RF-59  El módulo debe integrarse al sistema de permisos vigente,
+         aprovechando el módulo "Gestión de Contenido" y los permisos
+         articles.access y categories.access ya definidos en el sistema
+         (prisma/seed.ts:187-220, 397-403), hoy sin funcionalidad asociada.
+  RF-60  Toda publicación, modificación y eliminación de contenido debe quedar
+         registrada en la auditoría del sistema, identificando al responsable.
+
+6.3  ALCANCE EXCLUIDO
+     No forma parte de este requerimiento el rediseño gráfico del portal
+     público, la administración de la sección de elencos culturales (según lo
+     señalado en RF-56), ni la integración automática con redes sociales.
+
+
+--------------------------------------------------------------------------------
+VII. REQUISITOS NO FUNCIONALES COMUNES
+--------------------------------------------------------------------------------
+
+RNF-01  Los desarrollos deben realizarse sobre la plataforma tecnológica
+        vigente del sistema (Next.js 15, PostgreSQL, Prisma ORM), sin
+        introducir un sistema paralelo.
+RNF-02  Las modificaciones al modelo de datos deben ser no destructivas y
+        preservar íntegramente la información histórica migrada.
+RNF-03  Las interfaces deben ser utilizables desde dispositivos móviles,
+        manteniendo el comportamiento adaptativo del sistema actual.
+RNF-04  Deben reutilizarse los componentes de seguridad ya implementados en el
+        sistema (validación de archivos, control de acceso a archivos,
+        limitación de frecuencia de peticiones).
+RNF-05  Las páginas públicas no deben exponer información personal más allá de
+        lo estrictamente necesario, aplicando el enmascaramiento de datos ya
+        vigente en el sistema.
+RNF-06  Debe entregarse documentación técnica y manual de usuario de cada
+        módulo.
+RNF-07  Debe contemplarse capacitación al personal de la Dirección que operará
+        ambos módulos.
+RNF-08  Deben incorporarse pruebas automatizadas al menos sobre la generación
+        del documento, la unicidad del código de verificación y el
+        comportamiento de la página pública de verificación. El sistema no
+        cuenta actualmente con ningún marco de pruebas.
+
+
+--------------------------------------------------------------------------------
+VIII. ENTREGABLES ESPERADOS
+--------------------------------------------------------------------------------
+
+MÓDULO 1
+  E-01  Modelo de datos actualizado y migración aplicada.
+  E-02  Motor de generación de constancias en PDF, con plantilla por tipo.
+  E-03  Mecanismo de código de verificación, código QR y huella de integridad.
+  E-04  Página pública de verificación de documentos.
+  E-05  Componente de firma, conforme al nivel que se apruebe.
+  E-06  Funcionalidad de anulación y auditoría completa del módulo.
+  E-07  Generación por lotes y notificación al estudiante.
+  E-08  Manual de usuario y documentación técnica.
+
+MÓDULO 2
+  E-09  Modelo de datos de contenido y migración aplicada.
+  E-10  Panel administrativo de noticias y categorías.
+  E-11  Componente de carga y optimización de imágenes.
+  E-12  Sección de noticias en el portal público.
+  E-13  Panel de configuración de contenido del portal.
+  E-14  Bandeja de mensajes de contacto.
+  E-15  Manual de usuario y documentación técnica.
+
+
+--------------------------------------------------------------------------------
+IX. ESTIMACIÓN REFERENCIAL DE PLAZOS
+--------------------------------------------------------------------------------
+
+La siguiente estimación es referencial y corresponde al criterio de la
+Dirección solicitante. Se remite a OTI para su validación, ajuste y
+programación conforme a la disponibilidad efectiva de recursos.
+
+  MÓDULO 1 — Constancias con firma digital
+    Etapa 1.1  Definición del formato oficial y tipos       2 semanas  (*)
+    Etapa 1.2  Modelo de datos y clasificación por tipo     1 semana
+    Etapa 1.3  Generación del documento PDF                 3 semanas
+    Etapa 1.4  Verificación en línea (código, QR, hash)     2 semanas
+    Etapa 1.5  Auditoría, anulación y control interno       2 semanas
+    Etapa 1.6  Lotes, notificaciones y exportación          1 semana
+    Etapa 1.7  Pruebas, documentación y capacitación        2 semanas
+                                                     TOTAL: 13 semanas
+
+    (*) Etapa no técnica. Depende de la instancia que aprueba el formato
+        oficial del documento y puede ejecutarse en paralelo a la Etapa 1.2.
+
+    La firma digital criptográfica (Nivel B) se estima en 3 semanas
+    adicionales, condicionada a la disponibilidad del certificado.
+
+  MÓDULO 2 — Panel de noticias y gestión de contenido
+    Etapa 2.1  Modelo de datos de contenido                 1 semana
+    Etapa 2.2  Panel administrativo de noticias             3 semanas
+    Etapa 2.3  Carga y optimización de imágenes             2 semanas
+    Etapa 2.4  Sección de noticias en el portal público     2 semanas
+    Etapa 2.5  Configuración editable y bandeja de contacto 2 semanas
+    Etapa 2.6  Pruebas, documentación y capacitación        1 semana
+                                                     TOTAL: 11 semanas
+
+PRIORIZACIÓN SOLICITADA: se solicita priorizar el Módulo 1, por cuanto atiende
+un riesgo institucional (falsificación de documentos oficiales) y una
+observación de control interno, mientras que el Módulo 2 atiende una necesidad
+de gestión de la comunicación. Ambos módulos son independientes entre sí y
+pueden ejecutarse en paralelo si OTI dispone de los recursos.
+
+
+--------------------------------------------------------------------------------
+X. CRITERIOS DE ACEPTACIÓN
+--------------------------------------------------------------------------------
+
+MÓDULO 1
+  CA-01  Se emite una constancia de voluntariado y una de actividades
+         culturales, cada una con su formato y numeración propios.
+  CA-02  El documento generado se corresponde con el formato oficial aprobado.
+  CA-03  Al escanear el código QR con un teléfono, se accede a la página de
+         verificación y esta muestra los datos correctos del documento.
+  CA-04  El código de verificación funciona igualmente tecleado a mano.
+  CA-05  Un código inexistente y un documento no aprobado producen la misma
+         respuesta en la página de verificación.
+  CA-06  Un documento anulado se informa como anulado en la verificación.
+  CA-07  El usuario que registra una constancia no puede aprobarla.
+  CA-08  La eliminación y la anulación quedan registradas en la auditoría con
+         identificación del responsable.
+  CA-09  Se genera un lote de constancias de una actividad en una sola
+         operación.
+  CA-10  Se verifica el comportamiento con una fotocopia del documento.
+
+MÓDULO 2
+  CA-11  Personal de la Dirección, sin conocimientos técnicos y sin asistencia
+         del área de sistemas, publica una noticia con imagen y esta aparece
+         en el portal público.
+  CA-12  Una noticia en estado borrador no es accesible en el portal público
+         por ningún medio.
+  CA-13  Se modifica un dato de contacto desde el panel y el cambio se refleja
+         en el portal sin nuevo despliegue del sistema.
+  CA-14  Un mensaje enviado desde el formulario de contacto queda registrado
+         en la bandeja del panel.
+  CA-15  El tiempo de carga del portal público no se degrada respecto de su
+         desempeño actual.
+
+
+--------------------------------------------------------------------------------
+XI. RECURSOS Y CONDICIONES REQUERIDAS
+--------------------------------------------------------------------------------
+
+11.1  DE LA OFICINA DE TECNOLOGÍAS DE LA INFORMACIÓN
+      a) Asignación de personal de desarrollo para la ejecución.
+      b) Pronunciamiento sobre el nivel de firma digital a adoptar (numeral 5.5).
+      c) De optarse por el Nivel B o C: provisión y custodia del certificado
+         digital, definición del procedimiento de resguardo de la clave
+         privada, y política de renovación y revocación.
+      d) Confirmación de la capacidad de almacenamiento del servidor para el
+         volumen previsto de documentos generados e imágenes del portal.
+      e) Definición del procedimiento de respaldo de los documentos emitidos.
+
+11.2  DE LA DIRECCIÓN DE PROYECCIÓN SOCIAL Y EXTENSIÓN CULTURAL
+      a) Provisión del formato y texto oficial de cada tipo de constancia,
+         debidamente aprobado.
+      b) Provisión de los recursos gráficos institucionales en calidad
+         adecuada (escudo, sello, firma del funcionario autorizado).
+      c) Designación del personal responsable de la operación de ambos módulos.
+      d) Participación en las pruebas de aceptación.
+
+11.3  DE OTRAS INSTANCIAS
+      a) Secretaría General o la instancia competente: aprobación del formato
+         oficial del documento y determinación del funcionario facultado para
+         suscribir cada tipo de constancia.
+      b) Oficina de Asesoría Jurídica: opinión sobre el nivel de firma exigible
+         y sobre los datos personales que pueden exhibirse en la página
+         pública de verificación.
+
+
+--------------------------------------------------------------------------------
+XII. RIESGOS IDENTIFICADOS
+--------------------------------------------------------------------------------
+
+  R-01  Demora en la aprobación del formato oficial del documento.
+        Impacto: bloquea la Etapa 1.3, que es la de mayor duración.
+        Mitigación: iniciar la gestión del formato de manera simultánea a la
+        aprobación del presente requerimiento.
+
+  R-02  Ausencia de definición sobre el nivel de firma digital.
+        Impacto: obliga a rehacer trabajo si se cambia de criterio con el
+        desarrollo avanzado.
+        Mitigación: la arquitectura propuesta desacopla el componente de
+        firma, lo que permite migrar de nivel sin rehacer el módulo.
+
+  R-03  Constancias históricas sin clasificación por tipo.
+        Impacto: los reportes por tipo quedarían incompletos.
+        Mitigación: revisar el campo "type_create" en los respaldos del
+        sistema anterior; de no ser recuperable, definir una categoría de
+        "no clasificada" para los registros históricos.
+
+  R-04  Compromiso de la clave privada del certificado (Niveles B y C).
+        Impacto: alto. Permitiría emitir documentos falsos con firma válida.
+        Mitigación: custodia fuera del código y del directorio público,
+        acceso restringido a nivel de sistema operativo, registro de auditoría
+        de cada firma y procedimiento de revocación previamente definido.
+
+  R-05  Regeneración de documentos ya emitidos.
+        Impacto: invalida la huella de integridad de las copias en circulación.
+        Mitigación: restringir la regeneración conforme al RF-08.
+
+  R-06  Publicación de contenido inadecuado en el portal (Módulo 2).
+        Impacto: reputacional.
+        Mitigación: control por permisos, estado de borrador previo a la
+        publicación y auditoría de responsables.
+
+  R-07  Indisponibilidad del portal afectaría la verificación de documentos.
+        Impacto: un tercero no podría validar una constancia mientras el
+        sistema esté caído.
+        Mitigación: contemplar la disponibilidad de la página de verificación
+        en el esquema de monitoreo del servidor.
+
+
+--------------------------------------------------------------------------------
+XIII. CONCLUSIONES Y RECOMENDACIONES
+--------------------------------------------------------------------------------
+
+13.1  El módulo de constancias del sistema actual no genera documentos: opera
+      como repositorio de archivos escaneados. Implementar firma digital
+      requiere, necesariamente, implementar primero la generación del
+      documento, por cuanto no resulta útil firmar digitalmente un escaneo
+      cuyo contenido el sistema no controla.
+
+13.2  El sistema no distingue entre constancias de voluntariado y constancias
+      de actividades culturales y extracurriculares. Esta clasificación es
+      requisito previo tanto para la emisión diferenciada como para el
+      reporte de gestión.
+
+13.3  Se recomienda adoptar el Nivel A de firma (verificación en línea con
+      código y QR) como primera etapa, por ser el que resuelve el riesgo
+      práctico de falsificación en el menor plazo y sin costo externo, dejando
+      la arquitectura preparada para incorporar firma criptográfica.
+
+13.4  Con independencia de la decisión sobre firma digital, se recomienda
+      atender de manera prioritaria e inmediata las siguientes observaciones
+      de control interno, por ser de bajo esfuerzo técnico y alto impacto:
+        a) Registrar en auditoría la eliminación y edición de constancias.
+        b) Impedir que el mismo usuario registre y apruebe una constancia.
+        c) Implementar la anulación en lugar de la eliminación física.
+
+13.5  El portal público carece de todo mecanismo de actualización de
+      contenido. El andamiaje de permisos del módulo de contenido ya se
+      encuentra sembrado en el sistema y sin uso, lo que reduce el esfuerzo de
+      implementación del Módulo 2.
+
+13.6  Ambos módulos son técnicamente independientes y pueden ejecutarse en
+      paralelo o de manera secuencial, según la disponibilidad de recursos de
+      la Oficina de Tecnologías de la Información.
+
+Por lo expuesto, se solicita a la Oficina de Tecnologías de la Información
+evaluar el presente requerimiento, emitir pronunciamiento sobre el nivel de
+firma digital a adoptar y programar la ejecución de los módulos descritos.
+
+Es cuanto informo a usted para los fines pertinentes.
+
+
+                              Atentamente,
+
+
+
+                    ______________________________________
+                              [Nombre completo]
+                                  [Cargo]
+                Dirección de Proyección Social y Extensión Cultural
+
+
+================================================================================
+ANEXO A — REFERENCIAS TÉCNICAS VERIFICADAS
+================================================================================
+
+Se consignan las ubicaciones exactas en el código fuente que sustentan el
+diagnóstico del numeral III, para facilitar la verificación por parte de OTI.
+
+MÓDULO DE CONSTANCIAS
+  prisma/schema.prisma:373-416
+      Modelo Constancia. Sin campo de tipo, modalidad ni categoría.
+  prisma/schema.prisma:334-339
+      Enum DocumentStatus. Incluye ANULADO, no utilizado en ningún endpoint.
+  prisma/schema.prisma:341-346
+      Enum DocumentType (CONSTANCIA, RESOLUCION, UNAMAD, DPSEC). Distingue
+      familias de documento, no subtipos de constancia.
+  components/documents/create-constancia-dialog.tsx:78
+      El tipo se envía fijo: formData.append("type", "CONSTANCIA").
+  components/documents/constancias-page-client.tsx:69-77
+      Botón "Exportar" sin acción asociada.
+  app/api/documents/constancias/[id]/approve/route.ts:25
+      La aprobación usa PermissionAction.UPDATE, el mismo permiso que la
+      edición. No existe separación de funciones.
+  app/api/documents/constancias/[id]/route.ts:294
+      La eliminación está bloqueada para constancias aprobadas, sin
+      alternativa funcional de anulación.
+  scripts/migrate-constancias.js:139-166
+      Mapeo de la migración desde Firebase. El campo de origen "type_create"
+      (índice 9) no fue migrado.
+  lib/security/uploads.ts
+      Componente de seguridad de archivos, reutilizable. Validación de tipo
+      real por firma de archivo, límite de 5 MB, prevención de recorrido de
+      directorios, almacenamiento fuera del directorio público.
+  app/api/documents/files/[...path]/route.ts:27-51
+      Control de acceso a archivos. Un archivo es público únicamente si
+      pertenece a un documento en estado APROBADO.
+  app/api/public/documentos/buscar/route.ts:7-11
+      Función de enmascaramiento del documento de identidad, criterio a
+      replicar en la página de verificación.
+
+PORTAL PÚBLICO
+  app/page.tsx
+      Página de inicio. Componente sin acceso a base de datos.
+  lib/elencos.ts:24 / lib/actividades.ts:23 / lib/site-config.ts:5
+      Contenido del portal como constantes literales en código fuente.
+  lib/elencos.ts:13-17
+      Los nombres y descripciones de los elencos están incorporados dentro de
+      los archivos de imagen, no como texto de la página.
+  components/landing/responsabilidad-oruga.tsx:27
+      Cifras institucionales codificadas directamente en la vista.
+  app/api/contacto/route.ts:83-97
+      Los mensajes de contacto se reenvían por correo y no se almacenan.
+  prisma/seed.ts:187-220
+      Módulo "Gestión de Contenido" con submódulos "Artículos" y "Categorías"
+      definidos en el menú, sin modelo de datos ni funcionalidad asociada.
+  prisma/seed.ts:397-403
+      Permisos articles.access y categories.access ya generados.
+
+AUDITORÍA
+  prisma/schema.prisma:299-314
+      Modelo AuditLog.
+  app/api/documents/constancias/[id]/approve/route.ts:85-97
+  app/api/documents/constancias/[id]/reject/route.ts:80
+      Únicos dos puntos del módulo de constancias que registran auditoría.
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================
