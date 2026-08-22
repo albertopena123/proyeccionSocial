@@ -5,6 +5,7 @@ import Image from "next/image"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { Flip, gsap, usePrefersReducedMotion } from "@/lib/gsap"
+import { useSwipe } from "@/hooks/use-swipe"
 
 /**
  * Carrusel "oruga" de los tres pilares. Adaptado del pen de Chris Gannon: una
@@ -66,8 +67,7 @@ export function ResponsabilidadOruga() {
   const [saliente, setSaliente] = useState<Saliente | null>(null)
   const [animando, setAnimando] = useState(false)
 
-  // El pie sigue al póster central: al caminar, el centro cambia y con él el
-  // texto. Con N=3 el centro es el del medio, que es donde cae la mirada.
+  // El pie sigue al póster central: al caminar, el centro cambia y con él el texto.
   const central = PILARES[tira[CENTRO].pilar]
 
   const caminar = useCallback(
@@ -78,15 +78,10 @@ export function ResponsabilidadOruga() {
       const nodos = Array.from(c.querySelectorAll<HTMLElement>("[data-carta]"))
       if (nodos.length !== N) return
 
-      // El que se va y los que permanecen. Solo se captura el estado de los que
-      // permanecen: al que se va lo maneja `saliente` por su cuenta, así Flip no
-      // intenta también animar su salida.
       const nodoSale = haciaDelante ? nodos[0] : nodos[nodos.length - 1]
       const permanecen = haciaDelante ? nodos.slice(1) : nodos.slice(0, -1)
       const cartaSale = haciaDelante ? tira[0] : tira[N - 1]
 
-      // Hueco exacto del que se va, relativo al contenedor: así la capa saliente
-      // aparece justo encima sin depender del ancho de tarjeta.
       const r = nodoSale.getBoundingClientRect()
       const rc = c.getBoundingClientRect()
 
@@ -112,6 +107,22 @@ export function ResponsabilidadOruga() {
     [animando, tira]
   )
 
+  // Gestos táctiles (Swipe)
+  const { onTouchStart, onTouchEnd } = useSwipe({
+    onLeft: () => caminar(true),
+    onRight: () => caminar(false),
+  })
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowRight") {
+      e.preventDefault()
+      caminar(true)
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault()
+      caminar(false)
+    }
+  }
+
   useLayoutEffect(() => {
     const p = pendiente.current
     if (!p) return
@@ -129,8 +140,6 @@ export function ResponsabilidadOruga() {
     }
 
     if (reduced) {
-      // Sin animación: el reordenamiento ya está en el DOM, solo se retira la
-      // capa saliente. El resultado es un cambio instantáneo, pero completo.
       terminar()
       return
     }
@@ -140,8 +149,6 @@ export function ResponsabilidadOruga() {
       targets: cartas,
       duration: DURACION,
       ease: "power2.inOut",
-      // La tarjeta nueva no estaba en el estado capturado: Flip la trata como
-      // entrante y la hace crecer desde la punta.
       onEnter: (els) =>
         gsap.fromTo(
           els,
@@ -150,7 +157,6 @@ export function ResponsabilidadOruga() {
         ),
     })
 
-    // La saliente se encoge sobre su hueco y, al acabar, se desmonta.
     const nodoSal = c.querySelector<HTMLElement>("[data-saliente]")
     if (nodoSal) {
       gsap.to(nodoSal, {
@@ -167,39 +173,47 @@ export function ResponsabilidadOruga() {
   }, [tira, reduced])
 
   return (
-    <div className="flex flex-col items-center">
-      {/* overflow-hidden recorta las puntas cuando la fila no cabe (móvil); en
-          escritorio caben las tres y queda centrada. La capa saliente se
-          posiciona respecto a este contenedor (relative). */}
+    <div
+      tabIndex={0}
+      role="region"
+      aria-label="Carrusel de pilares de responsabilidad social"
+      className="focus-visible:ring-brand-ring flex flex-col items-center rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-offset-4"
+      onKeyDown={onKeyDown}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <div
         ref={cont}
-        className="border-border relative flex items-end gap-3 overflow-hidden rounded-2xl border-2 border-dashed p-3 md:gap-4 md:p-4"
+        className="border-border relative flex items-end gap-3 overflow-hidden rounded-2xl border-2 border-dashed p-3 select-none md:gap-4 md:p-4"
       >
-        {tira.map((carta) => {
+        {tira.map((carta, index) => {
           const pilar = PILARES[carta.pilar]
+          const esCentro = index === CENTRO
+
           return (
             <div
               key={carta.uid}
               data-carta
               data-flip-id={`oruga-${carta.uid}`}
-              // relative es obligatorio: la Image usa fill (position:absolute) y
-              // sin un ancestro posicionado propio se cuela hasta el contenedor
-              // y las tres se superponen ocupándolo entero.
-              className="relative aspect-[1072/1467] w-32 shrink-0 overflow-hidden rounded-xl sm:w-36 md:w-44 lg:w-52"
+              onClick={() => {
+                if (index < CENTRO) caminar(false)
+                else if (index > CENTRO) caminar(true)
+              }}
+              className={`relative aspect-[1072/1467] w-32 shrink-0 cursor-pointer overflow-hidden rounded-xl transition-all duration-300 sm:w-36 md:w-44 lg:w-52 ${
+                esCentro ? "ring-brand/80 scale-105 shadow-xl ring-2" : "opacity-85 hover:scale-100 hover:opacity-100"
+              }`}
             >
               <Image
                 src={pilar.image}
                 alt={`${pilar.title}. ${pilar.description}`}
                 fill
                 sizes="(min-width: 1024px) 208px, (min-width: 768px) 176px, 144px"
-                className="object-cover"
+                className="pointer-events-none object-cover"
               />
             </div>
           )
         })}
 
-        {/* La copia que se está yendo: fuera de flujo, sobre el hueco que dejó,
-            aria-hidden porque su gemela ya está en la fila. */}
         {saliente && (
           <div
             data-saliente
@@ -224,10 +238,35 @@ export function ResponsabilidadOruga() {
         )}
       </div>
 
-      {/* Pie del póster central. aria-live para que se anuncie al caminar. El
-          título va de sobretítulo pequeño: en el póster está en grande, aquí solo
-          rotula la descripción, que es lo que la imagen no dice. */}
-      <div aria-live="polite" className="mt-6 min-h-24 max-w-md text-center md:mt-8">
+      {/* Indicadores de pilares */}
+      <div className="mt-5 flex items-center gap-2" aria-label="Indicador de pilar activo">
+        {PILARES.map((p, idx) => {
+          const esActivo = tira[CENTRO].pilar === idx
+          return (
+            <button
+              key={p.key}
+              type="button"
+              // La misma regla por posición que el clic en las tarjetas, no
+              // índices cableados: con tira[0]/tira[2] literales, añadir un
+              // cuarto pilar dejaba un punto muerto y otro que caminaba en
+              // dirección contraria.
+              onClick={() => {
+                const pos = tira.findIndex((c) => c.pilar === idx)
+                if (pos < CENTRO) caminar(false)
+                else if (pos > CENTRO) caminar(true)
+              }}
+              disabled={animando}
+              aria-label={`Ver pilar ${p.title}`}
+              className={`h-2 rounded-full transition-all duration-300 disabled:opacity-40 ${
+                esActivo ? "bg-brand w-7" : "bg-muted-foreground/30 hover:bg-muted-foreground/60 w-2"
+              }`}
+            />
+          )
+        })}
+      </div>
+
+      {/* Pie del póster central */}
+      <div aria-live="polite" className="mt-4 min-h-24 max-w-md text-center md:mt-6">
         <p className="text-brand font-display text-sm font-bold tracking-wide uppercase">
           {central.title}
         </p>
@@ -239,7 +278,7 @@ export function ResponsabilidadOruga() {
           type="button"
           onClick={() => caminar(false)}
           disabled={animando}
-          className="border-border hover:bg-accent focus-visible:ring-brand-ring flex size-11 items-center justify-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"
+          className="border-border hover:bg-accent focus-visible:ring-brand-ring flex size-11 items-center justify-center rounded-full border transition-transform duration-200 active:scale-95 focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"
         >
           <ChevronLeft className="size-5" />
           <span className="sr-only">Pilar anterior</span>
@@ -248,7 +287,7 @@ export function ResponsabilidadOruga() {
           type="button"
           onClick={() => caminar(true)}
           disabled={animando}
-          className="border-border hover:bg-accent focus-visible:ring-brand-ring flex size-11 items-center justify-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"
+          className="border-border hover:bg-accent focus-visible:ring-brand-ring flex size-11 items-center justify-center rounded-full border transition-transform duration-200 active:scale-95 focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"
         >
           <ChevronRight className="size-5" />
           <span className="sr-only">Pilar siguiente</span>

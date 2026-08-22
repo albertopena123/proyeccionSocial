@@ -3,11 +3,9 @@ export default function AuthLayout({
 }: {
     children: React.ReactNode
 }) {
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-            <div className="w-full max-w-md">
-                {children}
-            </div>
-        </div>
-    )
+    // Sin envoltorio: cada página de auth compone su propia pantalla completa.
+    // El antiguo max-w-md centrado de aquí impedía diseños a todo el ancho como
+    // el login a dos paneles, y forgot/reset-password ya traían el suyo propio
+    // (quedaban doblemente envueltas).
+    return children
 }

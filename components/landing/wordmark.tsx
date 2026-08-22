@@ -75,7 +75,10 @@ export function Wordmark() {
       // perspective para que el rotationX de cada carácter tenga profundidad y
       // no sea un simple volteo plano.
       style={{ perspective: "800px" }}
-      className="text-brand font-display mx-auto mb-8 max-w-[18ch] text-center text-[clamp(2.25rem,7vw,6rem)] leading-[0.95] font-extrabold tracking-tight text-balance"
+      // Blanco y no color de marca: el titular vive sobre la foto del campus, y
+      // el magenta sobre el scrim oscuro se embarraba. El color de marca ya lo
+      // ponen el propio pabellón de la foto y el botón de constancias.
+      className="font-display mx-auto mb-8 max-w-[18ch] text-center text-[clamp(2.25rem,7vw,6rem)] leading-[0.95] font-extrabold tracking-tight text-balance text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.45)]"
     >
       {TEXTO}
     </h1>

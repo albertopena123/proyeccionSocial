@@ -190,28 +190,45 @@ export function SiteHeader() {
     const FUERZA = 0.32
     const FUERZA_ICONO = 0.18
 
-    const onMove = (e: MouseEvent) => {
+    let rafId: number | null = null
+    let latestE: MouseEvent | null = null
+
+    const updateMagnetic = () => {
+      if (!latestE) return
       const r = zona.getBoundingClientRect()
-      const x = gsap.utils.mapRange(r.left, r.right, -r.width / 2, r.width / 2, e.clientX)
-      const y = gsap.utils.mapRange(r.top, r.bottom, -r.height / 2, r.height / 2, e.clientY)
+      const x = gsap.utils.mapRange(r.left, r.right, -r.width / 2, r.width / 2, latestE.clientX)
+      const y = gsap.utils.mapRange(r.top, r.bottom, -r.height / 2, r.height / 2, latestE.clientY)
 
       gsap.to(boton, {
         x: x * FUERZA,
         y: y * FUERZA,
-        duration: 0.4,
+        duration: 0.35,
         ease: "power2.out",
         overwrite: "auto",
       })
       gsap.to(icono, {
         x: x * FUERZA_ICONO,
         y: y * FUERZA_ICONO,
-        duration: 0.4,
+        duration: 0.35,
         ease: "power2.out",
         overwrite: "auto",
       })
+      rafId = null
+    }
+
+    const onMove = (e: MouseEvent) => {
+      latestE = e
+      if (!rafId) {
+        rafId = requestAnimationFrame(updateMagnetic)
+      }
     }
 
     const onLeave = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
+      latestE = null
       gsap.to([boton, icono], {
         x: 0,
         y: 0,
@@ -221,9 +238,10 @@ export function SiteHeader() {
       })
     }
 
-    zona.addEventListener("mousemove", onMove)
+    zona.addEventListener("mousemove", onMove, { passive: true })
     zona.addEventListener("mouseleave", onLeave)
     return () => {
+      if (rafId) cancelAnimationFrame(rafId)
       zona.removeEventListener("mousemove", onMove)
       zona.removeEventListener("mouseleave", onLeave)
       gsap.set([boton, icono], { x: 0, y: 0 })
@@ -276,7 +294,7 @@ export function SiteHeader() {
         // Con el menú abierto la cabecera se queda transparente: si no, su fondo
         // taparía el borde superior de los paneles.
         data-scrolled={scrolled && !open}
-        className="data-[scrolled=true]:bg-background/92 data-[scrolled=true]:border-border fixed inset-x-0 top-0 z-50 border-b border-transparent transition-[background-color,border-color] duration-300 data-[scrolled=true]:backdrop-blur-md"
+        className="group/header data-[scrolled=true]:bg-background/92 data-[scrolled=true]:border-border fixed inset-x-0 top-0 z-50 border-b border-transparent transition-[background-color,border-color] duration-300 data-[scrolled=true]:backdrop-blur-md"
       >
         <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link
@@ -291,11 +309,15 @@ export function SiteHeader() {
               priority
               className="size-8 object-contain"
             />
+            {/* En lo alto la cabecera flota sobre la foto del hero (y, con el
+                menú abierto, sobre su velo oscuro): el texto va en blanco y solo
+                recupera los tonos del tema cuando aparece el fondo al hacer
+                scroll. */}
             <span className="leading-none">
-              <span className="text-foreground font-display block text-sm font-extrabold tracking-tight">
+              <span className="font-display group-data-[scrolled=true]/header:text-foreground block text-sm font-extrabold tracking-tight text-white transition-colors duration-300">
                 DPSEU
               </span>
-              <span className="text-muted-foreground mt-1 block text-[0.7rem] leading-none">
+              <span className="group-data-[scrolled=true]/header:text-muted-foreground mt-1 block text-[0.7rem] leading-none text-white/75 transition-colors duration-300">
                 UNAMAD
               </span>
             </span>

@@ -1,4 +1,4 @@
-import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react"
+import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone, Send, Youtube } from "lucide-react"
 
 import { siteConfig } from "@/lib/site-config"
 import { ContactoForm } from "@/components/landing/contacto-form"
@@ -16,12 +16,17 @@ export function ContactoSection() {
   return (
     <section id="contacto" className="bg-background scroll-mt-16 px-6 py-24">
       <div className="mx-auto max-w-6xl">
+        {/* Mismo patrón de cabecera que el resto de secciones. */}
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-foreground font-display text-3xl font-extrabold tracking-tight text-balance md:text-5xl">
+          <div className="border-brand/20 bg-brand/5 text-brand dark:bg-brand/15 inline-flex items-center gap-2 rounded-full border px-3.5 py-1 text-xs font-semibold backdrop-blur-sm">
+            <Send className="text-brand size-3.5" />
+            <span>Escríbenos</span>
+          </div>
+          <h2 className="text-foreground font-display mt-4 text-3xl font-extrabold tracking-tight text-balance md:text-5xl">
             Ponte en contacto
           </h2>
-          <div className="bg-brand mx-auto mt-6 h-1 w-16 rounded-full" />
-          <p className="text-muted-foreground mt-6 text-lg text-pretty">
+          <div className="bg-brand mx-auto mt-5 h-1 w-16 rounded-full" />
+          <p className="text-muted-foreground mt-4 text-lg text-pretty">
             ¿Tienes una consulta, una propuesta o quieres sumarte al voluntariado? Escríbenos.
           </p>
         </div>

@@ -15,15 +15,21 @@ const TILE_MS = 2600
 
 export function Hero() {
   const [tile, setTile] = useState(0)
+  const [tilePausado, setTilePausado] = useState(false)
 
   // El mosaico va rotando entre elencos, como el de apps en la referencia.
   // Con reduced-motion se queda quieto en el primero: no se pierde información,
   // los seis están listados enteros en la sección de Elencos.
+  //
+  // Timeout keyado con `tile`, no interval fijo: cada cambio (clic o tick)
+  // reinicia la cuenta, así un clic nunca es pisado por el tick automático
+  // milisegundos después. Hover/focus pausan del todo, como en ElencosStack.
   useEffect(() => {
+    if (tilePausado) return
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
-    const t = setInterval(() => setTile((i) => (i + 1) % ELENCOS.length), TILE_MS)
-    return () => clearInterval(t)
-  }, [])
+    const t = setTimeout(() => setTile((i) => (i + 1) % ELENCOS.length), TILE_MS)
+    return () => clearTimeout(t)
+  }, [tile, tilePausado])
 
   // La portada no tiene animación de entrada propia a propósito: la cortina
   // suena en cada carga y ya ES la entrada. Animarla además por debajo haría que
@@ -46,31 +52,58 @@ export function Hero() {
       id="inicio"
       className="relative flex min-h-svh flex-col justify-end overflow-hidden pt-24"
     >
+      {/* Foto aérea del campus a sangre completa. Va como primer hijo absoluto
+          (no con z negativo: un z-index negativo la mandaría detrás del
+          bg-background del contenedor de la página y desaparecería). El
+          contenido lleva `relative` para pintarse encima. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <Image
+          src="/banner/banner1.jpg"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
+        {/* Scrim en dos capas: un velo uniforme que baja el brillo general de la
+            foto (cielo y césped son muy luminosos) y un degradado cargado hacia
+            abajo, que es donde se asienta todo el texto del hero. */}
+        <div className="absolute inset-0 bg-black/25" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/30" />
+      </div>
+
       {/* El escudo enorme en línea fina, desbordando por la derecha: el mismo
           papel que la marca gigante de fondo de la referencia, pero con la
-          geometría que la propia UNAMAD eligió. Antes era el PNG a opacidad 4%,
-          que leía como mancha; en contorno se le ve el meandro. */}
+          geometría que la propia UNAMAD eligió. Sobre la foto va en blanco
+          translúcido, como marca de agua en el cielo. */}
       <div
         aria-hidden
-        className="text-brand/[0.13] pointer-events-none absolute -top-28 -right-36 hidden lg:block dark:text-brand/25"
+        className="pointer-events-none absolute -top-28 -right-36 hidden text-white/15 lg:block"
       >
         <EscudoOutline className="size-[42rem]" />
       </div>
 
       {/* max-w-7xl (1280px) dejaba el diseño convertido en una isla del 43% del
           ancho en un monitor de 3000px. Ahora el tope sube a 100rem y hasta ahí
-          sigue al viewport. */}
-      <div className="mx-auto w-full max-w-[min(92vw,100rem)] px-6 pb-8">
+          sigue al viewport.
+          `relative`: sin él, la foto de fondo (absoluta y posterior en orden de
+          pintado que el flujo normal) taparía el contenido. */}
+      <div className="relative mx-auto w-full max-w-[min(92vw,100rem)] px-6 pb-8">
         {/* El PNG original pesa 2.7MB; next/image lo reescala y lo sirve en
             formato moderno, así que con `sizes` acotado bajan a unas decenas de
             kB. Ojo: `sizes` tiene que seguir a los anchos reales de abajo —si se
             quedan cortos, Next sirve una imagen pequeña y se ve borrosa.
             El alt recoge lo que el propio póster dice, no una descripción mía.
 
-            Centrada y grande: el hero ancla su contenido abajo y dejaba medio
-            viewport vacío arriba. Este póster es lo que llena ese hueco. */}
+            Centrada y grande, superpuesta a la foto del campus: el hero ancla
+            su contenido abajo y dejaba medio viewport vacío arriba. Este póster
+            es lo que llena ese hueco. */}
+        {/* Versión sin el fondo blanco del original (generada con sharp,
+            flood-fill del blanco desde los bordes): el collage circular queda
+            flotando sobre la foto del campus. El drop-shadow sigue la silueta
+            del alfa, no la caja, y lo despega del fondo. */}
         <Image
-          src="/images/proyeccion_social_banner.png"
+          src="/images/proyeccion_social_banner_sin_fondo.png"
           alt="Proyección social, extensión universitaria y voluntariado al servicio del desarrollo — UNAMAD"
           width={1254}
           height={1254}
@@ -81,7 +114,7 @@ export function Hero() {
           // wordmark y el tagline. Con un tope fijo de 416px se quedaba en el
           // 14% de un monitor de 3000px mientras sobraban 870px verticales.
           // El original son 1254px, así que hasta 44rem no pierde nitidez.
-          className="mx-auto mb-8 h-[min(42vh,44rem)] w-auto max-w-[85vw] rounded-2xl object-contain"
+          className="mx-auto mb-8 h-[min(42vh,44rem)] w-auto max-w-[85vw] object-contain drop-shadow-[0_10px_35px_rgba(0,0,0,0.45)]"
         />
 
         {/* Titular: el texto real de la portada, que entra carácter a carácter
@@ -89,7 +122,7 @@ export function Hero() {
         <Wordmark />
 
         <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-          <p className="text-muted-foreground max-w-md text-base text-pretty md:text-lg">
+          <p className="max-w-md text-base text-pretty text-white/90 md:text-lg">
             Proyección social, extensión universitaria y voluntariado al servicio del desarrollo
             de Madre de Dios.
           </p>
@@ -106,21 +139,29 @@ export function Hero() {
               </Link>
             </Button>
 
-            {/* Mosaico rotatorio de elencos */}
-            <div
-              className="relative hidden size-32 shrink-0 overflow-hidden rounded-2xl transition-colors duration-500 sm:block"
+            {/* Mosaico interactivo de elencos */}
+            <button
+              type="button"
+              onClick={() => setTile((i) => (i + 1) % ELENCOS.length)}
+              onMouseEnter={() => setTilePausado(true)}
+              onMouseLeave={() => setTilePausado(false)}
+              onFocus={() => setTilePausado(true)}
+              onBlur={() => setTilePausado(false)}
+              title="Haz clic para ver el siguiente elenco"
+              aria-label={`Elenco actual: ${active.name}. Clic para cambiar.`}
+              className="group focus-visible:ring-brand-ring relative hidden size-32 shrink-0 cursor-pointer overflow-hidden rounded-2xl shadow-md transition-all duration-500 hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:outline-none sm:block"
               style={{ backgroundColor: active.color, color: active.fg }}
             >
               <div
                 key={active.key}
                 className="animate-in fade-in zoom-in-95 absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center duration-500"
               >
-                <ActiveIcon className="size-7" />
+                <ActiveIcon className="size-7 transition-transform duration-300 group-hover:scale-110" />
                 <span className="text-xs leading-tight font-semibold text-balance">
                   {active.name}
                 </span>
               </div>
-            </div>
+            </button>
           </div>
         </div>
 

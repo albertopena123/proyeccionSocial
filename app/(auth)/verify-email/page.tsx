@@ -149,17 +149,20 @@ function VerifyEmailContent() {
 }
 
 export default function VerifyEmailPage() {
+    // El centrado que antes ponía el layout de auth vive ahora en cada página.
     return (
-        <Suspense fallback={
-            <Card className="w-full max-w-md mx-auto">
-                <CardContent className="pt-6">
-                    <div className="flex justify-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                    </div>
-                </CardContent>
-            </Card>
-        }>
-            <VerifyEmailContent />
-        </Suspense>
+        <div className="bg-muted/40 flex min-h-screen items-center justify-center p-4">
+            <Suspense fallback={
+                <Card className="w-full max-w-md mx-auto">
+                    <CardContent className="pt-6">
+                        <div className="flex justify-center">
+                            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                        </div>
+                    </CardContent>
+                </Card>
+            }>
+                <VerifyEmailContent />
+            </Suspense>
+        </div>
     )
 }

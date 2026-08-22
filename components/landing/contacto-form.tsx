@@ -145,7 +145,13 @@ export function ContactoForm() {
           />
         </div>
 
-        <Button type="submit" disabled={enviando} className="w-full sm:w-auto">
+        {/* En color de marca, como el resto de acciones principales del sitio
+            (consultar constancias, iniciar sesión): era el único CTA en negro. */}
+        <Button
+          type="submit"
+          disabled={enviando}
+          className="bg-brand text-brand-foreground hover:bg-brand-hover w-full sm:w-auto"
+        >
           {enviando ? (
             <>
               <Loader2 className="size-4 animate-spin" />

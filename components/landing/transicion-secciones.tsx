@@ -23,7 +23,7 @@ import { gsap, ScrollTrigger, usePrefersReducedMotion } from "@/lib/gsap"
  * cortinilla.
  */
 
-/** Puntos de control de la onda. Más puntos, ondulación más fina. */
+/** Puntos de control de la onda. */
 const NUM_PUNTOS = 10
 
 /** Desfase aleatorio de cada punto: es lo que hace que la onda no sea uniforme. */
@@ -33,7 +33,19 @@ const RETARDO_PUNTOS = 0.12
 const RETARDO_POR_CAPA = 0.1
 
 /** Corto a propósito: es un barrido de paso, no una pantalla de carga. */
-const DURACION = 0.4
+const DURACION = 0.38
+
+/** Intervalo mínimo entre barridos consecutivos para evitar saturación en scroll veloz. */
+const MIN_INTERVALO_MS = 650
+
+// Precomputar constantes de segmentos X y control points para no dividir en cada frame
+const SEGMENT_STEP = 100 / (NUM_PUNTOS - 1)
+const HALF_STEP = SEGMENT_STEP / 2
+const PASOS_X = Array.from({ length: NUM_PUNTOS - 1 }, (_, j) => {
+  const x = (j + 1) * SEGMENT_STEP
+  const cx = x - HALF_STEP
+  return { x: Number(x.toFixed(2)), cx: Number(cx.toFixed(2)) }
+})
 
 export function TransicionSecciones() {
   const svg = useRef<SVGSVGElement>(null)
@@ -41,28 +53,29 @@ export function TransicionSecciones() {
   const puntos = useRef<number[][]>([])
   const tapando = useRef(false)
   const linea = useRef<gsap.core.Timeline | null>(null)
+  const ultimoBarrido = useRef(0)
   const reduced = usePrefersReducedMotion()
 
-  // Reconstruye el atributo `d` de cada capa. Corre en CADA fotograma, así que
-  // no hay nada aquí que no sea imprescindible.
+  // Reconstruye el atributo `d` de cada capa de forma optimizada.
   const pintar = useCallback(() => {
-    capas.current.forEach((capa, i) => {
-      const p = puntos.current[i]
-      if (!capa || !p) return
+    const list = capas.current
+    const pts = puntos.current
+    const isTapando = tapando.current
 
-      let d = tapando.current ? `M 0 0 V ${p[0]} C` : `M 0 ${p[0]} C`
+    for (let i = 0; i < list.length; i++) {
+      const capa = list[i]
+      const p = pts[i]
+      if (!capa || !p) continue
+
+      let d = isTapando ? `M 0 0 V ${p[0].toFixed(1)} C` : `M 0 ${p[0].toFixed(1)} C`
       for (let j = 0; j < NUM_PUNTOS - 1; j++) {
-        const x = ((j + 1) / (NUM_PUNTOS - 1)) * 100
-        const cx = x - ((1 / (NUM_PUNTOS - 1)) * 100) / 2
-        d += ` ${cx} ${p[j]} ${cx} ${p[j + 1]} ${x} ${p[j + 1]}`
+        const { x, cx } = PASOS_X[j]
+        d += ` ${cx} ${p[j].toFixed(1)} ${cx} ${p[j + 1].toFixed(1)} ${x} ${p[j + 1].toFixed(1)}`
       }
-      // Cerrar por arriba o por abajo es lo que decide si la capa cubre o
-      // descubre: los puntos siempre van de 100 a 0, lo que cambia es el lado
-      // que se rellena.
-      d += tapando.current ? " V 100 H 0" : " V 0 H 0"
+      d += isTapando ? " V 100 H 0" : " V 0 H 0"
 
       capa.setAttribute("d", d)
-    })
+    }
   }, [])
 
   useEffect(() => {
@@ -77,8 +90,7 @@ export function TransicionSecciones() {
     }
   }, [pintar])
 
-  // Una pasada completa. Siempre anima los puntos de 100 a 0: progress(0) los
-  // devuelve a 100 (rebobina las tweens anteriores) y clear() las retira.
+  // Una pasada completa. Siempre anima los puntos de 100 a 0.
   const pasada = useCallback(
     () =>
       new Promise<void>((resolve) => {
@@ -106,13 +118,14 @@ export function TransicionSecciones() {
     []
   )
 
-  // El barrido: sube cubriendo (tapando) y sigue subiendo hasta salir por arriba
-  // (destapando), sin corte entre medias. El guardia de isActive() evita que dos
-  // cruces seguidos lancen barridos solapados: mientras uno corre, se ignoran.
+  // El barrido optimizado: sube cubriendo y destapando sin colisiones de animación.
   const barrido = useCallback(async () => {
+    const ahora = Date.now()
+    if (ahora - ultimoBarrido.current < MIN_INTERVALO_MS) return
     const tl = linea.current
     if (!tl || tl.isActive()) return
 
+    ultimoBarrido.current = ahora
     if (svg.current) svg.current.style.visibility = "visible"
     tapando.current = true
     await pasada()
@@ -136,9 +149,13 @@ export function TransicionSecciones() {
     const cambiar = (idx: number) => {
       const i = Math.max(0, Math.min(secciones.length - 1, idx))
       if (i === activa) return
+      const anterior = activa
       activa = i
       // En la carga NO hay barrido: solo cuando el cambio lo provoca el scroll.
-      if (iniciado) void barrido()
+      // Y solo en el cruce con la PRIMERA sección (el hero): al dejarla bajando
+      // o al volver a ella subiendo. En cada frontera se hacía pesado; así el
+      // barrido marca la salida de la portada y el resto del scroll pasa limpio.
+      if (iniciado && (anterior === 0 || i === 0)) void barrido()
     }
 
     // Una sección es la "actual" cuando su borde superior pasa el centro de la
@@ -181,17 +198,17 @@ export function TransicionSecciones() {
       className="pointer-events-none invisible fixed inset-0 z-[90] h-full w-full"
     >
       <defs>
-        {/* Los colores del pen original (naranja crush → rosa, y melocotón →
-            naranja): son ajenos a la paleta del sitio, así que van fijos y no
-            por var(--…). Si algún día se quieren integrar, aquí es donde se
-            cambian a los tokens de marca. */}
+        {/* Familia del magenta institucional (#db0455): el pen original venía
+            en naranja crush → rosa, ajeno a la paleta, y la cortina era lo
+            único del sitio fuera de marca. Van en hex fijo y no por var(--…):
+            son los mismos en claro y oscuro, como el barrido de un telón. */}
         <linearGradient id="transicion-frente" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#ff8709" />
-          <stop offset="100%" stopColor="#f7bdf8" />
+          <stop offset="0%" stopColor="#db0455" />
+          <stop offset="100%" stopColor="#ffb1cd" />
         </linearGradient>
         <linearGradient id="transicion-fondo" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#ffd9b0" />
-          <stop offset="100%" stopColor="#ff8709" />
+          <stop offset="0%" stopColor="#ffd6e5" />
+          <stop offset="100%" stopColor="#e8206b" />
         </linearGradient>
       </defs>
 
