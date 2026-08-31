@@ -56,3 +56,6 @@ logs/
 # son los WebP de public/images/elencos/, generados con scripts/convert-elencos.js.
 /assets/elencos-originales/
 /assets/responsabilidad-originales/
+
+# Playwright MCP (capturas/trazas del plugin de Claude Code)
+/.playwright-mcp/

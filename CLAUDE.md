@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Sistema integral para gestión de proyección social universitaria con autenticación, autorización y módulos especializados para resoluciones y documentos académicos.
 
 ## Stack Tecnológico
-- **Framework**: Next.js 15.4.5 (App Router)
+- **Framework**: Next.js 15.5.x (App Router; versión fijada en package.json)
 - **Autenticación**: NextAuth v5 (Credenciales + Google OAuth)
 - **Base de Datos**: PostgreSQL con Prisma ORM v6.13
 - **UI**: Shadcn/ui + Tailwind CSS v4 + Radix UI
@@ -44,6 +44,13 @@ npm run migrate:constancias:execute       # Ejecutar migración de constancias
 npm run migrate:constancias:verify        # Verificar migración
 npm run migrate:full                      # Ejecutar flujo completo de migración
 ```
+
+## Seguridad y dependencias
+
+- `npm audit` debe quedar en 0. `.npmrc` lleva `legacy-peer-deps=true` porque next-auth declara nodemailer ^7||^8 como peer opcional (no se usa su proveedor de email) y la versión sin CVEs es nodemailer 9.
+- `package.json` tiene `overrides` (postcss, deepmerge-ts) para transitivas que Next/Prisma aún no actualizan; al subir Next o Prisma, probar a quitarlas.
+- Subidas: `lib/security/uploads.ts` es la única puerta (MIME + firma binaria, extensión derivada del MIME, 5 MB, guardado en `uploads/` FUERA de `public/`). Se sirven sólo por `/api/files` y `/api/documents/files` con sesión/permiso, `nosniff` y sólo PDF/JPG/PNG/WebP en línea. No añadir SVG/HTML a las listas.
+- El `.htaccess` de la raíz deniega todo: en el Apache de UNAMAD hay un vhost (invpatrimonio.unamad.edu.pe :80/:443) cuyo DocumentRoot es esta carpeta y con él `.env` era descargable. La app sólo debe exponerse vía ProxyPass a Next (127.0.0.1:3001).
 
 ## Arquitectura de Alto Nivel
 

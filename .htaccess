@@ -1,0 +1,14 @@
+# Defensa en profundidad: esta carpeta es la RAIZ del proyecto Next.js (codigo,
+# .env, prisma/, uploads/). NUNCA debe servirse como DocumentRoot de Apache.
+#
+# En C:\Apache24\conf\extra\httpd-vhosts.conf y httpd-ssl.conf existe un vhost
+# (invpatrimonio.unamad.edu.pe, :80 y :443) con DocumentRoot apuntando aqui y
+# "Options Indexes"; con el, /.env, /package.json, /prisma/schema.prisma y todo
+# lo subido a /uploads quedan descargables sin sesion. Ese vhost debe apuntar a
+# otro sitio o proxyar a http://127.0.0.1:3001; mientras tanto, este archivo
+# (AllowOverride All esta activo) bloquea cualquier lectura directa.
+#
+# La app real se sirve por ProxyPass hacia Next (pm2, puerto 3001), que nunca
+# lee este archivo, asi que no afecta al funcionamiento normal.
+Require all denied
+Options -Indexes
